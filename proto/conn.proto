@@ -1,0 +1,146 @@
+syntax = "proto3";
+
+package trpc.yuanbao.conn_common;
+
+enum RetCode {
+  SUCCESS = 0;
+  PARAMS_INVALID = 40011;
+  AUTH_FAIL = 40100;
+  UNKNOWN_ROUTE = 40300;
+  ALREADY_AUTH = 41101;
+  SAME_KIND_DEV_LOGIN = 41102;
+  AUTH_TOKEN_INVALID = 41103;
+  AUTH_TOKEN_EXPIRED = 41104;
+  AUTH_USER_NOT_REGISTERED = 41105;
+  AUTH_USER_FORBIDDEN = 41106;
+  AUTH_USER_UNQUALIFIED = 41107;
+  AUTH_TOKEN_FORCED_EXPIRATION = 41108;
+  PROHIBIT_APP_VERSION = 41109;
+  PACKAGE_SIGN_ILLEGAL = 41110;
+  INNER_SVR_FAIL = 50400;
+  OVERLOAD_CONTROL = 50503;
+  SET_STATE_CONFLICT = 51001;
+  CONN_OVER_LIMIT = 51002;
+  NO_USER_ONLINE = 51003;
+  PARTIAL_FAIL = 51004;
+  NET_FAIL = 90001;
+  BACKEND_RETURN_FAIL = 90003;
+  USER_OFFLINE = 20001;
+  USER_NOT_EXIST = 20002;
+}
+
+message HeadMeta {
+  string key = 1;
+  string value = 2;
+}
+
+message Head {
+  uint32 cmdType = 1;
+  string cmd = 2;
+  uint32 seqNo = 3;
+  string msgId = 4;
+  string module = 5;
+  bool needAck = 6;
+  repeated HeadMeta meta = 7;
+  int32 status = 10;
+}
+
+message ConnMsg {
+  Head head = 1;
+  bytes data = 2;
+}
+
+message DirectedPush {
+  uint32 type = 1;
+  string content = 2;
+}
+
+message AuthInfo {
+  string uid = 1;
+  string source = 2;
+  string token = 3;
+}
+
+message DeviceInfo {
+  string appVersion = 1;
+  string appOperationSystem = 2;
+  string appBundleId = 3;
+  string qimei = 4;
+  string qimei36 = 5;
+  string h38 = 6;
+  string language = 7;
+  string deviceId = 8;
+  string deviceName = 9;
+  string instanceId = 10;
+  string tid = 11;
+  string uskey = 12;
+  string busParamsMd5 = 13;
+  string packageType = 14;
+  string appPublishChannel = 15;
+  string signVersion = 16;
+  string packageSignature = 17;
+  string brand = 18;
+  string h42 = 19;
+  string xDeviceId = 20;
+  string xPlatform = 21;
+  string dialToken = 22;
+  string qimei36Token = 23;
+  string botVersion = 24;
+}
+
+message Container {
+  int32 type = 1;
+  string uniqueKey = 2;
+}
+
+message AuthBindReq {
+  string bizId = 1;
+  AuthInfo authInfo = 2;
+  DeviceInfo deviceInfo = 3;
+  Container containerInfo = 4;
+  string envName = 5;
+  uint32 bindMode = 6;
+  string forceToken = 7;
+}
+
+message AuthBindRsp {
+  int32 code = 1;
+  string message = 2;
+  string connectId = 3;
+  uint64 timestamp = 4;
+  string clientIp = 5;
+}
+
+message PingReq {}
+
+message PingRsp {
+  uint32 heartInterval = 1;
+  uint64 timestamp = 2;
+}
+
+message KickoutMsg {
+  int32 status = 1;
+  string reason = 2;
+  string otherDeviceName = 3;
+}
+
+message Meta {
+  string key = 1;
+  string value = 2;
+}
+
+message UpdateMetaReq {
+  repeated Meta metaInfos = 1;
+}
+
+message UpdateMetaRsp {
+  int32 code = 1;
+  string message = 2;
+}
+
+message PushMsg {
+  string cmd = 1;
+  string module = 2;
+  string msgId = 3;
+  bytes data = 4;
+}

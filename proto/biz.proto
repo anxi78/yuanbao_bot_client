@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package trpc.yuanbao.yuanbao_conn.yuanbao_openclaw_proxy;
+
+message ImImageInfoArray {
+  uint32 type = 1;
+  uint32 size = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  string url = 5;
+}
+
+message MsgContent {
+  string text = 1;
+  string uuid = 2;
+  uint32 imageFormat = 3;
+  string data = 4;
+  string desc = 5;
+  string ext = 6;
+  string sound = 7;
+  repeated ImImageInfoArray imageInfoArray = 8;
+  uint32 index = 9;
+  string url = 10;
+  uint32 fileSize = 11;
+  string fileName = 12;
+}
+
+message MsgBodyElement {
+  string msgType = 1;
+  MsgContent msgContent = 2;
+}
+
+message SendC2CMessageReq {
+  string msgId = 1;
+  string toAccount = 2;
+  string fromAccount = 3;
+  uint32 msgRandom = 4;
+  repeated MsgBodyElement msgBody = 5;
+}
+
+message SendC2CMessageRsp {
+  int32 code = 1;
+  string message = 2;
+}
+
+message SendGroupMessageReq {
+  string msgId = 1;
+  string groupCode = 2;
+  string fromAccount = 3;
+  string toAccount = 4;
+  string random = 5;
+  repeated MsgBodyElement msgBody = 6;
+  string refMsgId = 7;
+}
+
+message SendGroupMessageRsp {
+  int32 code = 1;
+  string message = 2;
+}
+
+message InboundMessagePush {
+  string callbackCommand = 1;
+  string fromAccount = 2;
+  string toAccount = 3;
+  string senderNickname = 4;
+  string groupCode = 5;
+  string groupName = 6;
+  uint32 msgSeq = 7;
+  uint32 msgRandom = 8;
+  uint32 msgTime = 9;
+  string msgKey = 10;
+  string msgId = 11;
+  repeated MsgBodyElement msgBody = 12;
+  string cloudCustomData = 13;
+  uint32 eventTime = 14;
+  string botOwnerId = 15;
+}
+
+message GetGroupMemberListReq {
+  string groupCode = 1;
+}
+
+message Member {
+  string userId = 1;
+  string nickName = 2;
+  int32 userType = 3;
+}
+
+message GetGroupMemberListRsp {
+  int32 code = 1;
+  string message = 2;
+  repeated Member memberList = 3;
+}
+
+message QueryGroupInfoReq {
+  string groupCode = 1;
+}
+
+message GroupInfo {
+  string groupName = 1;
+  string groupOwnerUserId = 2;
+  string groupOwnerNickname = 3;
+  int32 groupSize = 4;
+}
+
+message QueryGroupInfoRsp {
+  int32 code = 1;
+  string msg = 2;
+  GroupInfo groupInfo = 3;
+}
