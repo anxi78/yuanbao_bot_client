@@ -14,7 +14,7 @@ pip install -r requirements.txt
 
 ## 配置
 
-编辑 `yuanbao_client.py` 或 `interactive_sender.py`，设置你的 Bot 凭证：
+编辑 `config.py` 文件，设置你的 Bot 凭证：
 
 ```python
 APP_KEY = "your_app_key"
@@ -22,6 +22,8 @@ APP_SECRET = "your_app_secret"
 ```
 
 Token 格式为 `appKey:appSecret`，可在元宝 Bot 管理后台获取。
+
+只需要配置一次，所有 `.py` 文件都会自动读取该配置。
 
 ## 启动
 

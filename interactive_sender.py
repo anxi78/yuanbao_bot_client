@@ -16,11 +16,8 @@ from typing import Optional, Dict, Any
 import requests
 import websockets
 
-# 配置（从原项目复制）
-APP_KEY = ""
-APP_SECRET = ""
-API_DOMAIN = "bot.yuanbao.tencent.com"
-WS_URL = "wss://bot-wss.yuanbao.tencent.com/wss/connection"
+# 从配置文件导入
+from config import APP_KEY, APP_SECRET, API_DOMAIN, WS_URL
 
 # 协议常量
 CMD_TYPE_REQUEST = 0
