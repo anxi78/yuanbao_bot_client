@@ -1,5 +1,4 @@
 # 元宝 Bot WebSocket 客户端
-
 元宝 Bot 的 WebSocket 客户端，支持自动回复、主动发送消息、艾特功能等。
 
 ## 安装依赖
@@ -66,3 +65,6 @@ python yuanbao_client.py
 - `yuanbao_client.py` - 主客户端，含完整 Protobuf 编解码
 - `interactive_sender.py` - 交互式消息发送器
 - `proto/` - Protobuf 协议定义文件
+
+# 特别感谢
+iflow cli - 本项目通过iflow ai开发
