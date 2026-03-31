@@ -59,7 +59,7 @@ python yuanbao_client.py
 | `/at 用户ID 内容` | 艾特指定用户 |
 | `/spam 内容 次数` | 重复发送消息 |
 | `/exit` | 退出程序 |
-
+### 艾特功能没有写成，算个半成品。各位大佬可自行开发。
 ## 文件说明
 
 - `yuanbao_client.py` - 主客户端，含完整 Protobuf 编解码
