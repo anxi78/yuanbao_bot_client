@@ -1,0 +1,112 @@
+> /members
+正在获取群成员列表...
+[DEBUG] 收到 6102 字节
+[DEBUG] head: cmd_type=1, cmd=get_group_member_list, msg_id=69adbf8d0747495aa9ed64b9808a6f42, status=0
+[DEBUG] pending_requests keys: ['69adbf8d0747495aa9ed64b9808a6f42']
+[DEBUG] 匹配到 pending request! cmd=get_group_member_list, biz_data_len=6012
+[DEBUG] 解码成功: code=0, members=82
+
+群成员列表 (共 82 人):
+--------------------------------------------------------
+    1. 笑 (U5TfrjOJr++MzOHu5XKkqg853zPxNmIrl5lotJ464T4wVFC1HLHzx5qq7AG0zjPq) [群主]
+    2. JasperReed (mmhc2ApDy7bb30RqbdkORTBUULUcsfPHmqrsAbTOM+o=) [群主]
+    3. 65 (6bXMgW7+QkfPrY/xXtdo9DBUULUcsfPHmqrsAbTOM+o=) [群主]
+    4. 鞠. (6X5YKVHYOfuj8eejPq3l9lWZzai7kVITvQIX3BkTYhwwVFC1HLHzx5qq7AG0zjPq) [群主]
+    5. 子宸 (LTL/yrVktyzI6SlFsD1Jqqrx38+B9fb5frZ+sPQheVgwVFC1HLHzx5qq7AG0zjPq) [群主]
+    6. 用户8f5d (UYnUNB7ts6Kq8IyPoh+/QXpZ0GTt0jwWZOAY/enxg7wwVFC1HLHzx5qq7AG0zjPq) [群主]
+    7. 隔壁老王 (4I6ihF/ihJ/nMTYe2OQbuPIOsuae0w96LB+Y84j+if0wVFC1HLHzx5qq7AG0zjPq) [群主]
+    8. zeroking (MQWEUi8Cho3+rMDtyHaW8sOQ9WKiFEDs5gjSbtkBRM8wVFC1HLHzx5qq7AG0zjPq) [群主]
+    9. k (waf/9TMT4lg6gXMJHvSxv9IYm2D2+8iybhmo5nr7BoQwVFC1HLHzx5qq7AG0zjPq) [群主]
+   10. 󠄉 (q72dMpJQuIyKp0DUn/Dph74NthbjzSpJYaZoRfAFo+owVFC1HLHzx5qq7AG0zjPq) [群主]
+   11. 文强哥 (oPAeLg1B2kIApUYta1d/YjBUULUcsfPHmqrsAbTOM+o=) [群主]
+   12. 阿智 (gEanJc5dsmfDsEpzFSm6wEv4hYRJgJOi8kXYIpewiywwVFC1HLHzx5qq7AG0zjPq) [群主]
+   13. 王广广 (L/Niq10EKbKmHT6t82sHVzBUULUcsfPHmqrsAbTOM+o=) [群主]
+   14. 张三 (i89E8GT19HGXzGok2Aa6QLKrA9P2YQI7Tv9tY0Ib2oowVFC1HLHzx5qq7AG0zjPq) [群主]
+   15. 我是来哥哟 (S21lMkoWvF0ephL0C9xV7TBUULUcsfPHmqrsAbTOM+o=) [群主]
+   16. 木 (bYWxIrdIPxuJKL64Jl9AQv0aTfT88Dqle+Ze6o9BfnEwVFC1HLHzx5qq7AG0zjPq) [群主]
+   17. 小小高 (xywbwW7zvrwSqSN5xMBlEMkkCpQo2aaLM7IkiTsAvf0wVFC1HLHzx5qq7AG0zjPq) [群主]
+   18. 云婧往兮 (90LGN0g7TwrWBloFQtXwYq60vHuwrRG2VCPrMWYBPwkwVFC1HLHzx5qq7AG0zjPq) [群主]
+   19. 🇨🇳小宇宙 (oE8NK6OAo5Msg5dBY0C7qICAGnsFQtZR4RKcohC6VSwwVFC1HLHzx5qq7AG0zjPq) [群主]
+   20. 追光少年 (yfoNJTkNZNJd2TR/foA51Q1uGp0aMcnOwl8Xn3rCjJQwVFC1HLHzx5qq7AG0zjPq) [群主]
+   21. ጿ ኈ ቼ ዽ (bBpftkyJw8/HVIo1u0qQpM0XkbaqrqpKdfxV4E9kXG8wVFC1HLHzx5qq7AG0zjPq) [群主]
+   22. 笑_bot (bot_c95fbd852ad44cdb98e9ee1a7b5e1976) [未知(3)]
+   23. Skyball (ikf3RouWa/0Z2o5uDO0jRA==) [群主]
+   24. 㕦尘丶 (LytBRgt2ph7kf/PyC3vdPDBUULUcsfPHmqrsAbTOM+o=) [群主]
+   25. cun. (jnE7m1LFski2q3orNrPsVW1DfLliJorrE92f0WgQt5AwVFC1HLHzx5qq7AG0zjPq) [群主]
+   26. April azure (bQnCG0jns3qY0bUxN9NpXB5YNbAf4x44YNCifjgui5wwVFC1HLHzx5qq7AG0zjPq) [群主]
+   27. ����Anxi (jLxW2rYrm2sz3uOJZa8SFliOhPXq6yW26WMPtepuG7YwVFC1HLHzx5qq7AG0zjPq) [群主]
+   28. 文件传输助手 (uBPX40QENxtG+jExeOL25PI4iMtYD3LTy0IdeKNNL8owVFC1HLHzx5qq7AG0zjPq) [群主]
+   29. CQR-大道至简 (PjgJivz5nBnqZ0olnLgUVDBUULUcsfPHmqrsAbTOM+o=) [群主]
+   30. 予. (HHBR+ZapXs5rWWpBdjZEtaJb27PEQFgJNTlG/6/XEYAwVFC1HLHzx5qq7AG0zjPq) [群主]
+   31. Lucky (8qK8BtVjX/R3s/SbmheePWxK+JRdR0egDlmJ7lRaob4wVFC1HLHzx5qq7AG0zjPq) [群主]
+   32. Yabuki (F1Th2J7DSRDps+lzL5pvrWzQgdGwJNBBd8UoPNm/Mx4wVFC1HLHzx5qq7AG0zjPq) [群主]
+   33. FITO (WKai6Xn+xE1E4JVE8yQZVAANVCa1lQmlZd401cGL8CAwVFC1HLHzx5qq7AG0zjPq) [群主]
+   34. 老 Ken (PvDihy91IX3O96CvHXySkTBUULUcsfPHmqrsAbTOM+o=) [群主]
+   35. 对空六课170cm (f/BbD9Ru6fgoS5cmHSNrDTi0GF/3zNYPRhvRJcp4KQ4wVFC1HLHzx5qq7AG0zjPq) [群主]
+   36. 没有名字 (lUbAoyatcD53AmlLhxEANIv+KOP7dYElNE/BIxjUGJswVFC1HLHzx5qq7AG0zjPq) [群主]
+   37. 我其实是我自己 (rJOc7pjTaTfESmPFw+TDSHBESDzWy8obx9VJ47nQaFAwVFC1HLHzx5qq7AG0zjPq) [群主]
+   38. . (pwxmIiB4RXH93yHEoOJxJYi9b0qGXPzBIECxpZMOJnQwVFC1HLHzx5qq7AG0zjPq) [群主]
+   39. ccj (bdQcTLBbPzOmJOcR68hU15aBe6OHY0G8FEtXIhS32KwwVFC1HLHzx5qq7AG0zjPq) [群主]
+   40. 少卿饼 (BcxFXjI5cvhhDeKdSlNrJHPs78GGt6upvtNfROxW2j4wVFC1HLHzx5qq7AG0zjPq) [群主]
+   41. 馋白 (Q14h5UpYKcVNBKMEaYACnvzzy8D1nVBGgRyZL3NvNWAwVFC1HLHzx5qq7AG0zjPq) [群主]
+   42. 🌪︎ (Wvht6T4Hsf8nRg2qIZxUh8t3qx2dT2KYgnkSvsrwrxswVFC1HLHzx5qq7AG0zjPq) [群主]
+   43. Love-me(‧̣̥̇꒪່⍢꒪່ ) (Eiznktoo9tpTn8+qwRUyc1HM1//EmJ8v/rpGugYbjsIwVFC1HLHzx5qq7AG0zjPq) [群主]
+   44. 蜡笔小新眼子 (JwDLG4oV9O8AZJEYRxsEmWPAqnwdYtrRKEsHeUjQYE0wVFC1HLHzx5qq7AG0zjPq) [群主]
+   45. 我是入木几 (YWpMofBHCTnp9cjglu4TQ0H53YN6IwuhLR4aCzs2NJ4wVFC1HLHzx5qq7AG0zjPq) [群主]
+   46. mpmpes (Qoz88ezIqJDScctB26zIiwxyPWZYVf2vAUI80WBXVkgwVFC1HLHzx5qq7AG0zjPq) [群主]
+   47. 78 (bZzHrifN5gsvyL83G63K3seJYzsbTrH3+2t1WyeqbugwVFC1HLHzx5qq7AG0zjPq) [群主]
+   48. 美的Bot (bot_f96526f50bc64b98988eb0520efa3778) [未知(3)]
+   49. 清清 (Hd25YdZbn+0vETnwNDAbahjKxWSPoL/x/N9N+CR2PN0wVFC1HLHzx5qq7AG0zjPq) [群主]
+   50. ？ (2uhKvpHO4nMtUVqRF63mzvZ3wSO+AkYRmrybZBf2PgswVFC1HLHzx5qq7AG0zjPq) [群主]
+   51. 用户TxtQ (juiz5ASLQZjvSAwe3tt3WzBUULUcsfPHmqrsAbTOM+o=) [群主]
+   52. 七个棒棒糖 (7MLz7v3RgE7c3dm5vAVadjBUULUcsfPHmqrsAbTOM+o=) [群主]
+   53. 重生奥今 (3leJxPUKHSq9XNXbLuerGtGFiJF95x7glNYFl/7FnwwwVFC1HLHzx5qq7AG0zjPq) [群主]
+   54. Think (+7gtFPKZRoWGLjLwFMM7pQLbvdsK0Cwe2y55xrVDZYEwVFC1HLHzx5qq7AG0zjPq) [群主]
+   55. ANXI_小 (T5nuIHyzb6dk78gHkk490Vk/TDAeDo+sWOiHzLkJqYIwVFC1HLHzx5qq7AG0zjPq) [群主]
+   56. ANXI的小Bot (bot_3f9867bf7ec24c118e79d8fb927a4b87) [未知(3)]
+   57. 贾维斯 (bot_36d3c5c3e2494fd2bf1bce0cc050ca48) [未知(3)]
+   58. ？的Bot (bot_62c97e292b9c4f79875a056e91a0d324) [未知(3)]
+   59. 皮皮 (bot_52f6231032d24196a4a886e19efa9e94) [未知(3)]
+      60. ⁧ (DXh9aUiKyWo1f58bH6KLhZ4Qyln7I8x7pk6G+NstesswVFC1HLHzx5qq7AG0zjPq) [群主]
+   61. 风鳖-Bot (bot_a6266ea2dd76440d8f78aa387300fa24) [未知(3)]
+   62. ጿ ኈ ቼ ዽ的Bot (bot_20b7a8a63bef4e948fbdcb381a7ebc6f) [未知(3)]
+   63. ����Anxi的Bot (bot_660a7b683bbe4ac490c810239be1602d) [未知(3)]
+   64. 上君狄英 (DDIEinnXTXlFZW/HiqFkhOqMQh3c5MdKt2OTcXlI2gswVFC1HLHzx5qq7AG0zjPq) [群主]
+   65. 金狗 (bot_7eb5db1fc0e24fd28eecb63a6ed47493) [未知(3)]
+   66. 東Official・BOT (bot_cbb46b6c1b734be6bf1bcd01b0634602) [未知(3)]
+   67. 78的Bot (bot_9ade6fa37def48e9adadf43cf078bc05) [未知(3)]
+   68. 取索 (oi6+71xEU27OH30xZtA6bN5UlT9gdrVu0KPtutSqNjswVFC1HLHzx5qq7AG0zjPq) [群主]
+   69. 名称重了 (B1f+orpDdl2KyQv3kyebLCiUmIy4vwBzdRic/8q2XYQwVFC1HLHzx5qq7AG0zjPq) [群主]
+   70. 😋 (taWabQ0imxM8ldu5otLCwYEq82s1Ex758aWDvKwzY5EwVFC1HLHzx5qq7AG0zjPq) [群主]
+   71. ➣ (p5f1XDfMsIvGTcHD6rjshRelnqsCGH9/W3JH6Iz2ShgwVFC1HLHzx5qq7AG0zjPq) [群主]
+   72. 喵 (oCfBnaGrIZ1sfAfwHSRYzDtmCR40kuWABhadzBqa6aMwVFC1HLHzx5qq7AG0zjPq) [群主]
+   73. 王哪跑 (v1pvZ6iJIdVw7FJ8Ynh04jBUULUcsfPHmqrsAbTOM+o=) [群主]
+   74. System-Virus-XTZ (ZKPTod/FdOEGjg3yeXzWlzBUULUcsfPHmqrsAbTOM+o=) [群主]
+   75. shifeng～ (Z7FeQ/4g1+lY3NFI0fMlYDBUULUcsfPHmqrsAbTOM+o=) [群主]
+   76. 星际牛蛙 (Q/ojDQmB8WiexztdfzChwdkIu4Fw7zp61SZQpBYrzsQwVFC1HLHzx5qq7AG0zjPq) [群主]
+   77. 二十个黄昏 (SpZg0cy02fT55MfpggxE1s7TlNvOrAP6kPDn7gdz5fIwVFC1HLHzx5qq7AG0zjPq) [群主]
+   78. 月 (9O48AT0Rqj9jOwgGXbtLFpJKCyg9HAhS+Bimx+VzgOgwVFC1HLHzx5qq7AG0zjPq) [群主]
+   79. 木木三 (Ld5F6+RlfCIMDW3zs0OnxUdsl91DVHS4M2NlJacMqvgwVFC1HLHzx5qq7AG0zjPq) [群主]
+   80. 三硝基甲苯💣 (3NPyaA83/aKT6/8BhlmBwjBUULUcsfPHmqrsAbTOM+o=) [群主]
+   81. 绿子 (BRQE4aCWWJsJD3G1tSu+WVegpRaHgbpnSETymFoFaeYwVFC1HLHzx5qq7AG0zjPq) [群主]
+   82. 元宝 (szUvRH8s4ekettawNjDREmAG4W7h+Lhb8Sy9tq/otZU=) [管理员]
+--------------------------------------------------------
+共 82 名成员，已自动保存昵称到用户数据库
+> /myid Anxi
+正在获取群成员列表，搜索昵称 'Anxi'...
+[DEBUG] 收到 6102 字节
+[DEBUG] head: cmd_type=1, cmd=get_group_member_list, msg_id=8bf2c7787ce84cc082a50cf04c88c433, status=0
+[DEBUG] pending_requests keys: ['8bf2c7787ce84cc082a50cf04c88c433']
+[DEBUG] 匹配到 pending request! cmd=get_group_member_list, biz_data_len=6012
+[DEBUG] 解码成功: code=0, members=82
+
+找到 2 个匹配的成员:
+  用户ID: jLxW2rYrm2sz3uOJZa8SFliOhPXq6yW26WMPtepuG7YwVFC1HLHzx5qq7AG0zjPq
+  昵称:   ����Anxi
+  身份:   群主
+
+  用户ID: bot_660a7b683bbe4ac490c810239be1602d
+  昵称:   ����Anxi的Bot
+  身份:   未知
+
+>
