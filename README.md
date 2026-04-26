@@ -69,10 +69,14 @@ python yuanbao_client.py
 
 - `yuanbao_client.py` - 主客户端，含完整 Protobuf 编解码
 
-- `interactive_sender.py` - 交互式消息发送器原本
+- `interactive_sender.py` - 交互式消息发送器
 
 - `spam_sender.py` - 交互式消息发送器新版
 
 - `proto/` - Protobuf 协议定义文件
-## 特别感谢
-- `iflow cli`- 本项目由iflow开发。原项目已停止维护。
+
+
+
+# 特别感谢
+
+- `iflow cli` - 本项目由 iflow 开发。原项目已停止维护。
