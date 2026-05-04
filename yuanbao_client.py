@@ -19,7 +19,76 @@ import requests
 import websockets
 
 # 从配置文件导入
-from config import APP_KEY, APP_SECRET, API_DOMAIN, WS_URL
+import json
+import os
+
+config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+if os.path.exists(config_path):
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+    APP_KEY = config.get('APP_KEY', '')
+    APP_SECRET = config.get('APP_SECRET', '')
+    API_DOMAIN = config.get('API_DOMAIN', 'bot.yuanbao.tencent.com')
+    WS_URL = config.get('WS_URL', 'wss://bot-wss.yuanbao.tencent.com/wss/connection')
+    DEFAULT_GROUP_CODE = config.get('DEFAULT_GROUP_CODE', '')
+    AUTO_REPLY_GROUP_TEXT = config.get('AUTO_REPLY_GROUP_TEXT', '@我干啥')
+    AUTO_REPLY_C2C_TEXT = config.get('AUTO_REPLY_C2C_TEXT', '我是Bot')
+    AUTO_REPLY_RULES = config.get('AUTO_REPLY_RULES', [])
+    DEFAULT_REPLY = config.get('DEFAULT_REPLY', '这个问题我不知道答案')
+
+
+def get_auto_reply(text, is_group=False):
+    """
+    根据消息文本和聊天类型获取自动回复内容
+    Args:
+        text: 消息文本
+        is_group: 是否为群聊消息
+    Returns:
+        回复文本
+    """
+    # 去除首尾空白字符
+    original_text = text
+    text = text.strip()
+    
+    # 调试信息
+    print(f"[自动回复调试] 原始文本: '{original_text}', 处理后: '{text}'")
+    print(f"[自动回复调试] 规则数量: {len(AUTO_REPLY_RULES)}")
+    
+    # 遍历规则，按顺序匹配
+    for i, rule in enumerate(AUTO_REPLY_RULES):
+        match_type = rule.get('match_type', '')
+        if match_type == 'exact':
+            if text == rule.get('pattern', ''):
+                reply = rule.get('reply_text', '')
+                print(f"[自动回复调试] 规则{i} exact 匹配: pattern='{rule.get('pattern', '')}', 回复='{reply}'")
+                return reply
+        elif match_type == 'contains':
+            pattern = rule.get('pattern', '')
+            if pattern in text:
+                reply = rule.get('reply_text', '')
+                print(f"[自动回复调试] 规则{i} contains 匹配: pattern='{pattern}', 回复='{reply}'")
+                return reply
+        elif match_type == 'contains_any':
+            patterns = rule.get('patterns', [])
+            for pattern in patterns:
+                if pattern in text:
+                    reply = rule.get('reply_text', '')
+                    print(f"[自动回复调试] 规则{i} contains_any 匹配: pattern='{pattern}', 回复='{reply}'")
+                    return reply
+        # 可以添加更多匹配类型
+    
+    # 没有匹配任何规则，返回默认回复
+    # 如果配置了 DEFAULT_REPLY 则使用，否则根据聊天类型使用旧的默认回复
+    if DEFAULT_REPLY:
+        print(f"[自动回复调试] 无规则匹配，使用默认回复: '{DEFAULT_REPLY}'")
+        return DEFAULT_REPLY
+    elif is_group:
+        print(f"[自动回复调试] 无规则匹配，使用群聊默认回复: '{AUTO_REPLY_GROUP_TEXT}'")
+        return AUTO_REPLY_GROUP_TEXT
+    else:
+        print(f"[自动回复调试] 无规则匹配，使用私聊默认回复: '{AUTO_REPLY_C2C_TEXT}'")
+        return AUTO_REPLY_C2C_TEXT
+
 
 # 协议常量
 CMD_TYPE_REQUEST = 0
@@ -532,6 +601,10 @@ class YuanbaoClient:
         """签票获取 token"""
         url = f"https://{self.api_domain}/api/v5/robotLogic/sign-token"
         
+        # 检查 app_key 和 app_secret 是否为空
+        if not self.app_key or not self.app_secret:
+            raise Exception("APP_KEY 或 APP_SECRET 为空，请检查 config.json 配置文件")
+        
         nonce = self._generate_nonce()
         timestamp = self._get_beijing_time()
         signature = self._generate_signature(nonce, timestamp)
@@ -832,19 +905,24 @@ class YuanbaoClient:
                         if inbound:
                             try:
                                 # JSON 格式的字段名是下划线格式
-                                text = ''
+                                text_parts = []
                                 is_at_me = False
                                 msg_body = inbound.get('msg_body', [])
 
-                                if msg_body and len(msg_body) > 0:
-                                    msg_elem = msg_body[0]
+                                # 遍历所有消息元素
+                                for msg_elem in msg_body:
                                     msg_type = msg_elem.get('msg_type', '')
                                     msg_content = msg_elem.get('msg_content', {})
 
                                     if msg_type == 'TIMTextElem':
                                         # 普通文本消息
-                                        text = msg_content.get('text', '')
-                                        is_at_me = f"@{self.bot_id}" in text
+                                        text_content = msg_content.get('text', '')
+                                        if text_content:
+                                            text_parts.append(text_content)
+                                        # 检查文本中是否包含@bot_id
+                                        if f"@{self.bot_id}" in text_content:
+                                            is_at_me = True
+                                    
                                     elif msg_type == 'TIMCustomElem':
                                         # 自定义消息（群聊艾特是这种类型）
                                         data_str = msg_content.get('data', '{}')
@@ -854,12 +932,22 @@ class YuanbaoClient:
                                             if custom_data.get('elem_type') == 1002:
                                                 at_text = custom_data.get('text', '')
                                                 at_user_id = custom_data.get('user_id', '')
-                                                text = at_text
+                                                # 将艾特文本添加到文本部分
+                                                if at_text:
+                                                    text_parts.append(at_text)
                                                 # 检查是否艾特了本机器人
-                                                is_at_me = at_user_id == self.bot_id or f"@{self.bot_id}" in at_text
+                                                if at_user_id == self.bot_id or f"@{self.bot_id}" in at_text:
+                                                    is_at_me = True
                                                 print(f"[艾特] 检测到艾特消息: {at_text}, 目标用户: {at_user_id}")
                                         except:
                                             pass
+                                
+                                # 合并所有文本部分
+                                text = ' '.join(text_parts).strip()
+                                if not text:
+                                    # 如果没有文本内容，尝试使用艾特文本作为内容
+                                    # 或者保持为空
+                                    pass
 
                                 from_account = inbound.get('from_account')
                                 group_code = inbound.get('group_code')
@@ -872,17 +960,26 @@ class YuanbaoClient:
 
                                 is_group = 'Group' in callback_cmd if callback_cmd else False
 
+                                # 确定是否需要回复
+                                need_reply = False
                                 if is_group and group_code:
                                     # 群消息 - 只有被艾特才回复
                                     if is_at_me:
-                                        print(f"[回复] 群消息被艾特，回复...")
-                                        await self.send_group_message(group_code, "我是傻逼")
+                                        need_reply = True
                                     else:
                                         print(f"[跳过] 群消息未艾特")
                                 elif from_account:
                                     # 私聊消息 - 直接回复
-                                    print(f"[回复] 私聊消息，回复...")
-                                    await self.send_c2c_message(from_account, "我是傻逼")
+                                    need_reply = True
+                                
+                                if need_reply:
+                                    # 根据规则获取回复内容
+                                    reply_text = get_auto_reply(text, is_group)
+                                    print(f"[回复] 使用回复内容: {reply_text}")
+                                    if is_group:
+                                        await self.send_group_message(group_code, reply_text)
+                                    else:
+                                        await self.send_c2c_message(from_account, reply_text)
                             except Exception as e:
                                 print(f"[自动回复] 错误: {e}")
                                 import traceback
@@ -1003,7 +1100,7 @@ async def main():
         elif args.active_send:
             timeout = 30
         else:
-            timeout = 600
+            timeout = None  # 自动回复模式无限运行
         await asyncio.wait_for(connect_task, timeout=timeout)
     except asyncio.TimeoutError:
         print("\n[主程序] 超时断开")
@@ -1024,6 +1121,6 @@ if __name__ == "__main__":
     print("💬 自动回复模式: python yuanbao_client.py")
     print("📤 单次发送: python yuanbao_client.py -a 群号 '消息'")
     print("💥 刷屏模式: python yuanbao_client.py -aaa 群号 '消息' 10")
-    print("⏱️  运行时间: 默认10分钟后自动断开")
+    print("⏱️  运行时间: 自动回复模式无限运行，其他模式按需超时")
     print("=" * 50)
     asyncio.run(main())

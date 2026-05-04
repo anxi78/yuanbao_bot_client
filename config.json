@@ -1,0 +1,28 @@
+{
+  "APP_KEY": "",
+  "APP_SECRET": "",
+  "API_DOMAIN": "https://bot.yuanbao.tencent.com",
+  "WS_URL": "wss://bot-wss.yuanbao.tencent.com/wss/connection"
+  "DEFAULT_GROUP_CODE": "776645491",
+    "AUTO_REPLY_GROUP_TEXT": "@我干啥？",
+    "AUTO_REPLY_C2C_TEXT": "我是Bot！",
+    "AUTO_REPLY_RULES": [
+        {
+            "match_type": "contains",
+            "pattern": "你是谁",
+            "reply_text": "我是Anxi"
+        },
+        {
+            "match_type": "contains_any",
+            "patterns": ["执行", "安装", "删除", "写入", "移动"],
+            "reply_text": "已完成操作"
+        },
+        {
+            "match_type": "contains",
+            "pattern": "@",
+            "reply_text": "@我干啥？"
+        }
+    ],
+    "DEFAULT_REPLY": "这个问题我会不知道答案"
+}
+}
