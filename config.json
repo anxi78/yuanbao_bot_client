@@ -1,7 +1,7 @@
 {
   "APP_KEY": "",
   "APP_SECRET": "",
-  "API_DOMAIN": "https://bot.yuanbao.tencent.com",
+  "API_DOMAIN": "bot.yuanbao.tencent.com",
   "WS_URL": "wss://bot-wss.yuanbao.tencent.com/wss/connection",
   "DEFAULT_GROUP_CODE": "776645491",
     "AUTO_REPLY_GROUP_TEXT": "@我干啥？",
