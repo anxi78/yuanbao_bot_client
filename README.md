@@ -16,8 +16,8 @@ pip install -r requirements.txt
 编辑 `config.json` 文件，设置你的 Bot 凭证：
 
 `` json
-APP_KEY = "your_app_key"
-APP_SECRET = "your_app_secret"
+"APP_KEY": "",
+"APP_SECRET": "",
 ```
 
 Token 格式为 `appKey:appSecret`，可在元宝 Bot 管理后台获取。
@@ -29,13 +29,14 @@ Token 格式为 `appKey:appSecret`，可在元宝 Bot 管理后台获取。
 ### 交互式发送器（推荐）
 
 ```bash
-python interactive_sender.py
+python sender.py
 ```
 
 功能：
 - 发送群消息
 - 艾特用户（`/at`）
 - 刷屏模式（`/spam 内容 次数`）
+- 更多的你还是自己去使用就知道了，反正一大堆功能。就是发送图片的功能没做成。
 
 ### 自动回复客户端
 
@@ -59,12 +60,9 @@ python yuanbao_client.py
 | `/at 用户ID 内容` | 艾特指定用户 |
 | `/spam 内容 次数` | 重复发送消息 |
 | `/exit` | 退出程序 |
-### 艾特功能没有写成，算个半成品。各位大佬可自行开发。
+### 发送文件的功能没有写成算个半成品。各位大佬可自行开发。
 ## 文件说明
 
 - `yuanbao_client.py` - 主客户端，含完整 Protobuf 编解码
-- `interactive_sender.py` - 交互式消息发送器
+- `sender.py` - 交互式消息发送器
 - `proto/` - Protobuf 协议定义文件
-
-# 特别感谢
-iflow cli - 本项目通过iflow ai开发
