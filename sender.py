@@ -25,7 +25,7 @@ async def async_input(prompt: str = "") -> str:
 import websockets
 # 从配置文件导入
 import json
-with open("config1.json", "r", encoding="utf-8") as f:
+with open("config.json", "r", encoding="utf-8") as f:
     _config = json.load(f)
 APP_KEY = _config["APP_KEY"]
 APP_SECRET = _config["APP_SECRET"]
