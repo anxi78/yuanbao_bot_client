@@ -15,7 +15,7 @@ pip install -r requirements.txt
 
 编辑 `config.json` 文件，设置你的 Bot 凭证：
 
-`` json
+```json
 "APP_KEY": "",
 "APP_SECRET": "",
 ```
