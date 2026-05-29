@@ -1,0 +1,37 @@
+{
+    "APP_KEY": "",
+    "APP_SECRET": "",
+    "API_DOMAIN": "bot.yuanbao.tencent.com",
+    "WS_URL": "wss://bot-wss.yuanbao.tencent.com/wss/connection",
+    "DEFAULT_GROUP_CODE": "528352302",
+    "SPAM_INTERVAL": 1e-44,
+    "AUTO_REPLY_GROUP_TEXT": "@我干啥？",
+    "AUTO_REPLY_C2C_TEXT": "我是Bot！",
+    "AUTO_REPLY_RULES": [
+        {
+            "match_type": "contains",
+            "pattern": "你是谁",
+            "reply_text": "我是“真”Bot"
+        },
+        {
+            "match_type": "contains_any",
+            "patterns": [
+                "执行",
+                "安装",
+                "删除",
+                "写入",
+                "移动"
+            ],
+            "reply_text": "已完成操作"
+        },
+        {
+            "match_type": "exact",
+            "pattern": "@",
+            "reply_text": "@我干啥？",
+            "group_only": true
+        }
+    ],
+    "DEFAULT_REPLY": "这个问题我不知道答案",
+    "biz_proto": "syntax = \"proto3\";\n\npackage trpc.yuanbao.yuanbao_conn.yuanbao_openclaw_proxy;\n\nmessage ImImageInfoArray {\n  uint32 type = 1;\n  uint32 size = 2;\n  uint32 width = 3;\n  uint32 height = 4;\n  string url = 5;\n}\n\nmessage MsgContent {\n  string text = 1;\n  string uuid = 2;\n  uint32 imageFormat = 3;\n  string data = 4;\n  string desc = 5;\n  string ext = 6;\n  string sound = 7;\n  repeated ImImageInfoArray imageInfoArray = 8;\n  uint32 index = 9;\n  string url = 10;\n  uint32 fileSize = 11;\n  string fileName = 12;\n}\n\nmessage MsgBodyElement {\n  string msgType = 1;\n  MsgContent msgContent = 2;\n}\n\nmessage SendC2CMessageReq {\n  string msgId = 1;\n  string toAccount = 2;\n  string fromAccount = 3;\n  uint32 msgRandom = 4;\n  repeated MsgBodyElement msgBody = 5;\n}\n\nmessage SendC2CMessageRsp {\n  int32 code = 1;\n  string message = 2;\n}\n\nmessage SendGroupMessageReq {\n  string msgId = 1;\n  string groupCode = 2;\n  string fromAccount = 3;\n  string toAccount = 4;\n  string random = 5;\n  repeated MsgBodyElement msgBody = 6;\n  string refMsgId = 7;\n}\n\nmessage SendGroupMessageRsp {\n  int32 code = 1;\n  string message = 2;\n}\n\nmessage InboundMessagePush {\n  string callbackCommand = 1;\n  string fromAccount = 2;\n  string toAccount = 3;\n  string senderNickname = 4;\n  string groupCode = 5;\n  string groupName = 6;\n  uint32 msgSeq = 7;\n  uint32 msgRandom = 8;\n  uint32 msgTime = 9;\n  string msgKey = 10;\n  string msgId = 11;\n  repeated MsgBodyElement msgBody = 12;\n  string cloudCustomData = 13;\n  uint32 eventTime = 14;\n  string botOwnerId = 15;\n}\n\nmessage GetGroupMemberListReq {\n  string groupCode = 1;\n}\n\nmessage Member {\n  string userId = 1;\n  string nickName = 2;\n  int32 userType = 3;\n}\n\nmessage GetGroupMemberListRsp {\n  int32 code = 1;\n  string message = 2;\n  repeated Member memberList = 3;\n}\n\nmessage QueryGroupInfoReq {\n  string groupCode = 1;\n}\n\nmessage GroupInfo {\n  string groupName = 1;\n  string groupOwnerUserId = 2;\n  string groupOwnerNickname = 3;\n  int32 groupSize = 4;\n}\n\nmessage QueryGroupInfoRsp {\n  int32 code = 1;\n  string msg = 2;\n  GroupInfo groupInfo = 3;\n}\n",
+    "conn_proto": "syntax = \"proto3\";\n\npackage trpc.yuanbao.conn_common;\n\nenum RetCode {\n  SUCCESS = 0;\n  PARAMS_INVALID = 40011;\n  AUTH_FAIL = 40100;\n  UNKNOWN_ROUTE = 40300;\n  ALREADY_AUTH = 41101;\n  SAME_KIND_DEV_LOGIN = 41102;\n  AUTH_TOKEN_INVALID = 41103;\n  AUTH_TOKEN_EXPIRED = 41104;\n  AUTH_USER_NOT_REGISTERED = 41105;\n  AUTH_USER_FORBIDDEN = 41106;\n  AUTH_USER_UNQUALIFIED = 41107;\n  AUTH_TOKEN_FORCED_EXPIRATION = 41108;\n  PROHIBIT_APP_VERSION = 41109;\n  PACKAGE_SIGN_ILLEGAL = 41110;\n  INNER_SVR_FAIL = 50400;\n  OVERLOAD_CONTROL = 50503;\n  SET_STATE_CONFLICT = 51001;\n  CONN_OVER_LIMIT = 51002;\n  NO_USER_ONLINE = 51003;\n  PARTIAL_FAIL = 51004;\n  NET_FAIL = 90001;\n  BACKEND_RETURN_FAIL = 90003;\n  USER_OFFLINE = 20001;\n  USER_NOT_EXIST = 20002;\n}\n\nmessage HeadMeta {\n  string key = 1;\n  string value = 2;\n}\n\nmessage Head {\n  uint32 cmdType = 1;\n  string cmd = 2;\n  uint32 seqNo = 3;\n  string msgId = 4;\n  string module = 5;\n  bool needAck = 6;\n  repeated HeadMeta meta = 7;\n  int32 status = 10;\n}\n\nmessage ConnMsg {\n  Head head = 1;\n  bytes data = 2;\n}\n\nmessage DirectedPush {\n  uint32 type = 1;\n  string content = 2;\n}\n\nmessage AuthInfo {\n  string uid = 1;\n  string source = 2;\n  string token = 3;\n}\n\nmessage DeviceInfo {\n  string appVersion = 1;\n  string appOperationSystem = 2;\n  string appBundleId = 3;\n  string qimei = 4;\n  string qimei36 = 5;\n  string h38 = 6;\n  string language = 7;\n  string deviceId = 8;\n  string deviceName = 9;\n  string instanceId = 10;\n  string tid = 11;\n  string uskey = 12;\n  string busParamsMd5 = 13;\n  string packageType = 14;\n  string appPublishChannel = 15;\n  string signVersion = 16;\n  string packageSignature = 17;\n  string brand = 18;\n  string h42 = 19;\n  string xDeviceId = 20;\n  string xPlatform = 21;\n  string dialToken = 22;\n  string qimei36Token = 23;\n  string botVersion = 24;\n}\n\nmessage Container {\n  int32 type = 1;\n  string uniqueKey = 2;\n}\n\nmessage AuthBindReq {\n  string bizId = 1;\n  AuthInfo authInfo = 2;\n  DeviceInfo deviceInfo = 3;\n  Container containerInfo = 4;\n  string envName = 5;\n  uint32 bindMode = 6;\n  string forceToken = 7;\n}\n\nmessage AuthBindRsp {\n  int32 code = 1;\n  string message = 2;\n  string connectId = 3;\n  uint64 timestamp = 4;\n  string clientIp = 5;\n}\n\nmessage PingReq {}\n\nmessage PingRsp {\n  uint32 heartInterval = 1;\n  uint64 timestamp = 2;\n}\n\nmessage KickoutMsg {\n  int32 status = 1;\n  string reason = 2;\n  string otherDeviceName = 3;\n}\n\nmessage Meta {\n  string key = 1;\n  string value = 2;\n}\n\nmessage UpdateMetaReq {\n  repeated Meta metaInfos = 1;\n}\n\nmessage UpdateMetaRsp {\n  int32 code = 1;\n  string message = 2;\n}\n\nmessage PushMsg {\n  string cmd = 1;\n  string module = 2;\n  string msgId = 3;\n  bytes data = 4;\n}\n"
+}
