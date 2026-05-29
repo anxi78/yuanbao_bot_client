@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  yuanbao-bot:
+    build: .
+    container_name: yuanbao-bot
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-2570}:${APP_PORT:-2570}"
+    env_file:
+      - .env
+    volumes:
+      # 持久化 config.json，确保 Web 端的设置（群号、自动回复等）在容器重启后不丢失
+      - ./config.json:/app/config.json

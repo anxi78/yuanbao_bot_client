@@ -1,0 +1,1576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>元宝 Bot 控制台 - 完整功能版</title>
+    <style>
+        :root {
+            --bg-primary: #0f0f1a;
+            --bg-secondary: #1a1a2e;
+            --bg-card: #1e1e35;
+            --bg-tab: #12122a;
+            --border: #2a2a45;
+            --text-primary: #e0e0f0;
+            --text-secondary: #8888aa;
+            --text-muted: #555577;
+            --accent: #7c5cfc;
+            --accent-hover: #6a4ae8;
+            --success: #34c759;
+            --warning: #ff9500;
+            --danger: #ff3b30;
+            --error: #ff3b30;
+            --toast-bg: #2a2a45e0;
+            --input-bg: #252540;
+            --msg-self: #2a2a60;
+            --msg-other: #252540;
+            --tab-bar-bg: #0d0d1a;
+            --tab-bar-height: 56px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial, "Noto Sans SC", sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* App Container */
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 100vw;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+        .header-title {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--danger);
+            flex-shrink: 0;
+        }
+        .status-dot.connected {
+            background: var(--success);
+        }
+
+        /* Content Area */
+        .content {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Tab Pages */
+        .tab-page {
+            display: none;
+            height: 100%;
+            overflow-y: auto;
+            padding: 12px;
+            padding-bottom: 16px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .tab-page.active {
+            display: block;
+        }
+
+        /* Bottom Tab Bar */
+        .tab-bar {
+            display: flex;
+            background: var(--tab-bar-bg);
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+            height: var(--tab-bar-height);
+            z-index: 10;
+        }
+        .tab-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            padding: 6px 0;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: color 0.15s;
+            border: none;
+            background: transparent;
+            font-size: 10px;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .tab-item .tab-icon {
+            font-size: 22px;
+            line-height: 1;
+        }
+        .tab-item.active {
+            color: var(--accent);
+        }
+        .tab-item:active {
+            opacity: 0.7;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            user-select: none;
+            -webkit-user-select: none;
+            white-space: nowrap;
+        }
+        .btn:active {
+            transform: scale(0.96);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: var(--accent-hover);
+        }
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+        .btn-small {
+            padding: 5px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+        }
+        .btn-block {
+            width: 100%;
+        }
+
+        /* Quick Action Row */
+        .action-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        /* Message Log */
+        .message-log {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding-bottom: 8px;
+        }
+        .message-entry {
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+            max-width: 90%;
+            word-break: break-word;
+        }
+        .message-entry.other {
+            background: var(--msg-other);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        .message-entry.self {
+            background: var(--msg-self);
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .message-entry .msg-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 2px;
+        }
+        .message-entry .msg-sender {
+            color: var(--accent);
+            font-weight: 500;
+        }
+        .message-entry .msg-time {
+            float: right;
+            margin-left: 8px;
+        }
+        .message-entry .msg-index {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-right: 6px;
+            font-family: monospace;
+        }
+        .empty-state {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 40px 20px;
+            font-size: 14px;
+        }
+
+        /* Send Form */
+        .form-group {
+            margin-bottom: 12px;
+        }
+        .form-label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .form-input:focus {
+            border-color: var(--accent);
+        }
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+        textarea.form-input {
+            min-height: 80px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        /* Mode Toggle Chips */
+        .mode-chips {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .chip {
+            padding: 6px 14px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            font-size: 13px;
+            cursor: pointer;
+            background: transparent;
+            color: var(--text-secondary);
+            transition: all 0.15s;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .chip.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .chip:active {
+            transform: scale(0.95);
+        }
+
+        /* Sticker Grid */
+        .sticker-search, .member-search, .user-search {
+            margin-bottom: 10px;
+        }
+        .sticker-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            padding-bottom: 8px;
+        }
+        .sticker-item {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-card);
+            border: 2px solid transparent;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 13px;
+            text-align: center;
+            padding: 8px 4px;
+            transition: all 0.15s;
+            word-break: break-all;
+            line-height: 1.3;
+            color: var(--text-primary);
+        }
+        .sticker-item:active {
+            transform: scale(0.95);
+        }
+        .sticker-item.selected {
+            border-color: var(--accent);
+            background: var(--msg-self);
+        }
+        .sticker-item .sticker-emoji {
+            font-size: 28px;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .sticker-text-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .sticker-text-row .form-input {
+            flex: 1;
+        }
+        .sticker-text-row .btn {
+            flex-shrink: 0;
+        }
+        .sticker-actions, .reply-actions, .image-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        /* Member List & User List */
+        .member-list, .user-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .member-item, .user-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: var(--bg-card);
+            font-size: 14px;
+        }
+        .member-item .member-avatar, .user-item .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: white;
+            flex-shrink: 0;
+        }
+        .member-item .member-info, .user-item .user-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .member-item .member-name, .user-item .user-name {
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .member-item .member-id, .user-item .user-id {
+            font-size: 11px;
+            color: var(--text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Settings */
+        .settings-section {
+            margin-bottom: 20px;
+        }
+        .settings-section h3 {
+            font-size: 15px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border);
+        }
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            gap: 12px;
+        }
+        .setting-row .setting-label {
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .setting-row .form-input {
+            max-width: 200px;
+        }
+        .setting-row.setting-toggle {
+            padding: 8px 0;
+        }
+
+        /* Toggle Switch */
+        .toggle {
+            position: relative;
+            width: 48px;
+            height: 28px;
+            flex-shrink: 0;
+        }
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #3a3a55;
+            transition: 0.3s;
+            border-radius: 28px;
+        }
+        .toggle .slider::before {
+            content: "";
+            position: absolute;
+            height: 22px;
+            width: 22px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+        .toggle input:checked + .slider {
+            background: var(--accent);
+        }
+        .toggle input:checked + .slider::before {
+            transform: translateX(20px);
+        }
+        .setting-textarea {
+            width: 100%;
+            margin-top: 4px;
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+            max-width: 90vw;
+        }
+        .toast {
+            background: var(--toast-bg);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: var(--text-primary);
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: 14px;
+            animation: toastIn 0.3s ease;
+            pointer-events: auto;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+        .toast.error {
+            border-color: var(--danger);
+        }
+        .toast.success {
+            border-color: var(--success);
+        }
+        .toast.warning {
+            border-color: var(--warning);
+        }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--text-muted);
+            border-top: 2px solid var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        .spinner-lg {
+            width: 24px;
+            height: 24px;
+            border-width: 3px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loading-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 15, 26, 0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 2px;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .header-title { font-size: 16px; }
+            .tab-item .tab-icon { font-size: 20px; }
+            .tab-item { font-size: 9px; }
+            .sticker-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+            .sticker-item { font-size: 12px; padding: 6px 2px; }
+            .sticker-item .sticker-emoji { font-size: 24px; }
+        }
+
+        @media (min-width: 768px) {
+            .tab-page { padding: 20px; max-width: 700px; margin: 0 auto; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app">
+    <!-- Header -->
+    <header class="header">
+        <span class="header-title">🤖 元宝 Bot 控制台</span>
+        <div class="header-status">
+            <span id="statusText" style="color: var(--danger);">未连接</span>
+            <span class="status-dot" id="statusDot"></span>
+        </div>
+    </header>
+
+    <!-- Content -->
+    <div class="content" id="content">
+        <!-- Tab: 消息 -->
+        <div class="tab-page active" id="tab-messages">
+            <div class="action-row">
+                <button class="btn btn-success btn-small" id="btnConnect" onclick="connect()">🔗 连接</button>
+                <button class="btn btn-danger btn-small" id="btnDisconnect" onclick="disconnect()" disabled>🔌 断开</button>
+                <button class="btn btn-outline btn-small" onclick="loadRecentMessages()">🔄 刷新</button>
+                <button class="btn btn-outline btn-small" onclick="clearMessages()">🗑️ 清空</button>
+            </div>
+            
+            <div class="action-row">
+                <div class="form-group" style="flex: 1;">
+                    <input type="text" class="form-input" id="searchMessage" placeholder="🔍 搜索消息..." oninput="filterMessages()">
+                </div>
+                <select class="form-input" style="width: 120px;" id="msgLimit" onchange="loadRecentMessages()">
+                    <option value="20">最近20条</option>
+                    <option value="50" selected>最近50条</option>
+                    <option value="100">最近100条</option>
+                </select>
+            </div>
+            
+            <div id="messageLog" class="message-log">
+                <div class="empty-state">暂无消息<br><small>连接后消息会自动显示在这里</small></div>
+            </div>
+        </div>
+
+        <!-- Tab: 发送 -->
+        <div class="tab-page" id="tab-send">
+            <div class="mode-chips" id="modeChips">
+                <button class="chip active" data-mode="normal" onclick="setMode('normal')">💬 普通</button>
+                <button class="chip" data-mode="at" onclick="setMode('at')">@ 艾特</button>
+                <button class="chip" data-mode="spam" onclick="setMode('spam')">🔁 刷屏</button>
+                <button class="chip" data-mode="atspam" onclick="setMode('atspam')">@🔁 艾特刷屏</button>
+                <button class="chip" data-mode="multi-at" onclick="setMode('multi-at')">👥 批量@</button>
+                <button class="chip" data-mode="dm" onclick="setMode('dm')">✉️ 私聊</button>
+                <button class="chip" data-mode="dmspam" onclick="setMode('dmspam')">📨 私聊刷屏</button>
+            </div>
+
+            <div class="form-group" id="targetRow" style="display:none">
+                <label class="form-label" id="targetLabel">目标用户 ID</label>
+                <input type="text" class="form-input" id="inputTarget" placeholder="输入用户ID (批量艾特用逗号分隔)">
+                <small style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">
+                    格式: 用户ID 或 用户ID:昵称 (批量艾特: ID1,ID2,ID3)
+                </small>
+            </div>
+
+            <div class="form-group" id="countRow" style="display:none">
+                <div class="setting-row">
+                    <span class="setting-label">刷屏次数</span>
+                    <input type="number" class="form-input" id="inputCount" placeholder="次数" value="5" min="1" style="max-width: 120px;">
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">间隔(秒)</span>
+                    <input type="number" class="form-input" id="inputInterval" placeholder="间隔" value="1.0" min="0.1" step="0.1" style="max-width: 120px;">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">消息内容</label>
+                <textarea class="form-input" id="inputMessage" placeholder="输入要发送的消息..." rows="3"></textarea>
+            </div>
+
+            <button class="btn btn-primary btn-block" id="btnSend" onclick="sendMessage()">
+                📤 发送
+            </button>
+        </div>
+
+        <!-- Tab: 贴纸 -->
+        <div class="tab-page" id="tab-stickers">
+            <input type="text" class="form-input sticker-search" id="stickerSearch" placeholder="🔍 搜索贴纸..." oninput="filterStickers()">
+            <div class="sticker-grid" id="stickerGrid"></div>
+            
+            <div class="sticker-text-row">
+                <input type="text" class="form-input" id="stickerText" placeholder="附加文本（可选）">
+                <input type="text" class="form-input" id="stickerAtUser" placeholder="@ 用户ID（可选）" style="flex: 0.7;">
+            </div>
+            
+            <div class="sticker-actions">
+                <div class="setting-row" style="flex: 1;">
+                    <span class="setting-label">刷屏次数</span>
+                    <input type="number" class="form-input" id="stickerCount" value="1" min="1" style="max-width: 80px;">
+                </div>
+                <div class="setting-row" style="flex: 1;">
+                    <span class="setting-label">间隔(秒)</span>
+                    <input type="number" class="form-input" id="stickerInterval" value="1.0" min="0.1" step="0.1" style="max-width: 80px;">
+                </div>
+                <button class="btn btn-primary" id="btnSendSticker" onclick="sendSticker()">发送贴纸</button>
+            </div>
+        </div>
+
+        <!-- Tab: 成员 -->
+        <div class="tab-page" id="tab-members">
+            <div class="action-row">
+                <input type="text" class="form-input" style="flex:1" id="memberSearch" placeholder="🔍 搜索成员..." oninput="filterMembers()">
+                <button class="btn btn-primary btn-small" onclick="loadMembers()">🔄 刷新</button>
+            </div>
+            <div class="member-list" id="memberList">
+                <div class="empty-state">点击刷新获取群成员</div>
+            </div>
+        </div>
+
+        <!-- Tab: 用户管理 -->
+        <div class="tab-page" id="tab-users">
+            <div class="settings-section">
+                <h3>👥 用户管理</h3>
+                <div class="form-group">
+                    <label class="form-label">添加/更新用户</label>
+                    <div class="action-row">
+                        <input type="text" class="form-input" id="addUserId" placeholder="用户ID" style="flex: 1;">
+                        <input type="text" class="form-input" id="addUserNick" placeholder="昵称" style="flex: 1;">
+                        <button class="btn btn-success btn-small" onclick="addUser()">添加</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="action-row">
+                        <input type="text" class="form-input user-search" id="userSearch" placeholder="🔍 搜索用户..." oninput="filterUsers()" style="flex: 1;">
+                        <button class="btn btn-outline btn-small" onclick="loadUsers()">刷新列表</button>
+                    </div>
+                </div>
+                
+                <div class="user-list" id="userList">
+                    <div class="empty-state">暂无保存的用户</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: 高级功能 -->
+        <div class="tab-page" id="tab-advanced">
+            <div class="settings-section">
+                <h3>🔄 引用回复</h3>
+                <div class="form-group">
+                    <label class="form-label">选择消息序号 (从消息列表中)</label>
+                    <input type="number" class="form-input" id="replyIndex" placeholder="消息序号" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">回复内容</label>
+                    <textarea class="form-input" id="replyText" placeholder="输入回复内容..." rows="2"></textarea>
+                </div>
+                <div class="reply-actions">
+                    <input type="text" class="form-input" id="replyAtUser" placeholder="@ 用户ID（可选）" style="flex: 1;">
+                    <div class="setting-row" style="flex: 1;">
+                        <span class="setting-label">刷屏次数</span>
+                        <input type="number" class="form-input" id="replyCount" value="1" min="1" style="max-width: 80px;">
+                    </div>
+                    <button class="btn btn-primary" onclick="sendReply()">发送回复</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>🖼️ 发送图片</h3>
+                <div class="form-group">
+                    <label class="form-label">图片路径 (绝对路径)</label>
+                    <input type="text" class="form-input" id="imagePath" placeholder="/path/to/image.jpg">
+                </div>
+                <div class="image-actions">
+                    <input type="text" class="form-input" id="imageAtUser" placeholder="@ 用户ID（可选）" style="flex: 1;">
+                    <button class="btn btn-primary" onclick="sendImage()">发送图片</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>⚠️ 艾特全体</h3>
+                <div class="form-group">
+                    <label class="form-label">消息内容</label>
+                    <textarea class="form-input" id="atAllText" placeholder="输入要发送的消息..." rows="2"></textarea>
+                </div>
+                <button class="btn btn-danger btn-block" onclick="sendAtAll()">🚨 艾特全体成员</button>
+                <small style="color: var(--warning); display: block; margin-top: 8px; text-align: center;">
+                    慎用！可能会打扰所有群成员
+                </small>
+            </div>
+        </div>
+
+        <!-- Tab: 设置 -->
+        <div class="tab-page" id="tab-settings">
+            <div class="settings-section">
+                <h3>🔗 连接设置</h3>
+                <div class="setting-row">
+                    <span class="setting-label">群号</span>
+                    <input type="text" class="form-input" id="settingGroupCode" placeholder="群号">
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">刷屏间隔 (秒)</span>
+                    <input type="number" class="form-input" id="settingInterval" step="0.1" min="0" value="1.0" style="max-width: 100px;">
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <h3>🤖 自动回复</h3>
+                <div class="setting-row setting-toggle">
+                    <span class="setting-label">启用自动回复</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="settingAutoReply">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">群聊默认回复</label>
+                    <input type="text" class="form-input" id="settingGroupReply" placeholder="群聊回复文本">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">私聊默认回复</label>
+                    <input type="text" class="form-input" id="settingC2cReply" placeholder="私聊回复文本">
+                </div>
+            </div>
+            
+            <button class="btn btn-primary btn-block" onclick="saveSettings()">💾 保存设置</button>
+        </div>
+    </div>
+
+    <!-- Bottom Tab Bar -->
+    <nav class="tab-bar">
+        <button class="tab-item active" data-tab="tab-messages" onclick="switchTab('tab-messages')">
+            <span class="tab-icon">💬</span>
+            <span>消息</span>
+        </button>
+        <button class="tab-item" data-tab="tab-send" onclick="switchTab('tab-send')">
+            <span class="tab-icon">📤</span>
+            <span>发送</span>
+        </button>
+        <button class="tab-item" data-tab="tab-stickers" onclick="switchTab('tab-stickers')">
+            <span class="tab-icon">😀</span>
+            <span>贴纸</span>
+        </button>
+        <button class="tab-item" data-tab="tab-members" onclick="switchTab('tab-members')">
+            <span class="tab-icon">👥</span>
+            <span>成员</span>
+        </button>
+        <button class="tab-item" data-tab="tab-users" onclick="switchTab('tab-users')">
+            <span class="tab-icon">📇</span>
+            <span>用户</span>
+        </button>
+        <button class="tab-item" data-tab="tab-advanced" onclick="switchTab('tab-advanced')">
+            <span class="tab-icon">⚡</span>
+            <span>高级</span>
+        </button>
+        <button class="tab-item" data-tab="tab-settings" onclick="switchTab('tab-settings')">
+            <span class="tab-icon">⚙️</span>
+            <span>设置</span>
+        </button>
+    </nav>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ── Configuration ──
+const API_BASE = '';
+
+// ── State ──
+let currentMode = 'normal';
+let selectedSticker = null;
+let messageCount = 0;
+let isConnected = false;
+let stickerData = [];
+let allMembers = [];
+let allUsers = [];
+
+// ── Tab Switching ──
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    document.querySelector(`.tab-item[data-tab="${tabId}"]`).classList.add('active');
+
+    // Load data when switching to certain tabs
+    if (tabId === 'tab-stickers') loadStickers();
+    if (tabId === 'tab-members') loadMembers();
+    if (tabId === 'tab-users') loadUsers();
+    if (tabId === 'tab-settings') loadSettings();
+}
+
+// ── Toast Notifications ──
+function showToast(message, type = 'info', duration = 3000) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        toast.style.transition = '0.3s';
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
+// ── API Helper ──
+async function api(endpoint, options = {}) {
+    const url = `${API_BASE}${endpoint}`;
+    const config = {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+    };
+    if (options.body && typeof options.body !== 'string') {
+        config.body = JSON.stringify(options.body);
+    }
+    
+    try {
+        const res = await fetch(url, config);
+        const data = await res.json();
+        if (!res.ok && data.message) {
+            showToast(data.message, 'error');
+        }
+        return data;
+    } catch (e) {
+        showToast('网络请求失败: ' + e.message, 'error');
+        throw e;
+    }
+}
+
+// ── Update Status ──
+async function updateStatus() {
+    try {
+        const data = await api('/api/status');
+        const dot = document.getElementById('statusDot');
+        const text = document.getElementById('statusText');
+        isConnected = data.connected;
+        if (data.connected) {
+            dot.classList.add('connected');
+            text.textContent = `已连接 (${data.bot_id})`;
+            text.style.color = 'var(--success)';
+            document.getElementById('btnConnect').disabled = true;
+            document.getElementById('btnDisconnect').disabled = false;
+        } else {
+            dot.classList.remove('connected');
+            text.textContent = '未连接';
+            text.style.color = 'var(--danger)';
+            document.getElementById('btnConnect').disabled = false;
+            document.getElementById('btnDisconnect').disabled = true;
+        }
+    } catch (e) {
+        // Server might be starting up
+    }
+}
+
+// ── Connect / Disconnect ──
+async function connect() {
+    const btn = document.getElementById('btnConnect');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 连接中...';
+    try {
+        const data = await api('/api/connect', { method: 'POST' });
+        if (data.ok) {
+            showToast('✅ 连接成功！', 'success');
+            await updateStatus();
+        } else {
+            showToast('❌ ' + (data.message || '连接失败'), 'error');
+        }
+    } catch (e) {
+        showToast('❌ 连接出错: ' + e.message, 'error');
+    } finally {
+        btn.innerHTML = '🔗 连接';
+        btn.disabled = false;
+        await updateStatus();
+    }
+}
+
+async function disconnect() {
+    try {
+        const data = await api('/api/disconnect', { method: 'POST' });
+        if (data.ok) {
+            showToast('已断开连接', 'warning');
+        }
+    } catch (e) {
+        showToast('断开出错: ' + e.message, 'error');
+    } finally {
+        await updateStatus();
+    }
+}
+
+// ── Messages ──
+function appendMessage(msg) {
+    const log = document.getElementById('messageLog');
+    // Remove empty state if present
+    const empty = log.querySelector('.empty-state');
+    if (empty) empty.remove();
+
+    const entry = document.createElement('div');
+    const isSelf = msg.msg_type === 'send_group' || msg.msg_type === 'send_c2c' || msg.msg_type === 'send_sticker' || msg.sender_name === '我';
+    entry.className = `message-entry ${isSelf ? 'self' : 'other'}`;
+
+    const sender = msg.sender_name || (isSelf ? '我' : '未知');
+    const time = msg.time || '';
+    const index = messageCount;
+
+    entry.innerHTML = `
+        <div class="msg-meta">
+            <span class="msg-index">#${index}</span>
+            <span class="msg-sender">${escapeHtml(sender)}</span>
+            <span class="msg-time">${escapeHtml(time)}</span>
+        </div>
+        <div>${escapeHtml(msg.content || '')}</div>
+    `;
+    // Add click to reply
+    entry.style.cursor = 'pointer';
+    entry.title = '点击引用此消息';
+    entry.onclick = () => {
+        document.getElementById('replyIndex').value = index;
+        switchTab('tab-advanced');
+        document.getElementById('replyText').focus();
+    };
+    
+    log.appendChild(entry);
+    messageCount++;
+    log.scrollTop = log.scrollHeight;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function loadRecentMessages() {
+    const log = document.getElementById('messageLog');
+    const limit = document.getElementById('msgLimit').value;
+    try {
+        const data = await api(`/api/messages?limit=${limit}`);
+        if (data.messages) {
+            log.innerHTML = '';
+            messageCount = 0;
+            if (data.messages.length === 0) {
+                log.innerHTML = '<div class="empty-state">暂无消息记录</div>';
+                return;
+            }
+            data.messages.forEach(msg => appendMessage(msg));
+        }
+    } catch (e) {
+        // Silently fail
+    }
+}
+
+function filterMessages() {
+    const query = document.getElementById('searchMessage').value.toLowerCase();
+    document.querySelectorAll('.message-entry').forEach(el => {
+        const text = el.textContent.toLowerCase();
+        el.style.display = text.includes(query) ? 'flex' : 'none';
+    });
+}
+
+function clearMessages() {
+    if (confirm('确定要清空消息记录吗？')) {
+        document.getElementById('messageLog').innerHTML = '<div class="empty-state">消息已清空</div>';
+        messageCount = 0;
+    }
+}
+
+// ── Send Message ──
+function setMode(mode) {
+    currentMode = mode;
+    document.querySelectorAll('.chip').forEach(el => {
+        el.classList.toggle('active', el.dataset.mode === mode);
+    });
+
+    const targetRow = document.getElementById('targetRow');
+    const countRow = document.getElementById('countRow');
+    const targetLabel = document.getElementById('targetLabel');
+
+    targetRow.style.display = (mode === 'at' || mode === 'atspam' || mode === 'multi-at' || mode === 'dm' || mode === 'dmspam') ? 'block' : 'none';
+    countRow.style.display = (mode === 'spam' || mode === 'atspam' || mode === 'dmspam') ? 'flex' : 'none';
+
+    if (mode === 'at' || mode === 'atspam') targetLabel.textContent = '目标用户 ID (格式: ID:昵称 或 仅ID)';
+    else if (mode === 'multi-at') targetLabel.textContent = '用户 ID (多个用逗号分隔)';
+    else if (mode === 'dm' || mode === 'dmspam') targetLabel.textContent = '目标用户 ID';
+}
+
+async function sendMessage() {
+    if (!isConnected) {
+        showToast('⚠️ 请先连接', 'warning');
+        return;
+    }
+    const text = document.getElementById('inputMessage').value.trim();
+    if (!text && currentMode !== 'spam' && currentMode !== 'atspam' && currentMode !== 'dmspam') {
+        showToast('请输入消息内容', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btnSend');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 发送中...';
+
+    try {
+        const body = {
+            mode: currentMode,
+            text: text,
+            target: document.getElementById('inputTarget').value.trim(),
+            count: parseInt(document.getElementById('inputCount').value) || 5,
+            interval: parseFloat(document.getElementById('inputInterval').value) || 1.0,
+        };
+        const data = await api('/api/send', {
+            method: 'POST',
+            body: body,
+        });
+
+        if (data.ok) {
+            showToast('✅ ' + (data.message || '发送成功'), 'success');
+            if (currentMode === 'normal') {
+                appendMessage({
+                    time: new Date().toLocaleTimeString(),
+                    sender_name: '我',
+                    content: text,
+                    msg_type: 'send',
+                });
+            }
+            // Clear input for convenience
+            if (currentMode === 'normal') {
+                document.getElementById('inputMessage').value = '';
+            }
+        } else {
+            showToast('❌ ' + (data.message || '发送失败'), 'error');
+        }
+    } catch (e) {
+        showToast('❌ 发送出错: ' + e.message, 'error');
+    } finally {
+        btn.innerHTML = '📤 发送';
+        btn.disabled = false;
+    }
+}
+
+// ── Stickers ──
+async function loadStickers() {
+    try {
+        const query = document.getElementById('stickerSearch').value;
+        const data = await api(`/api/stickers${query ? '?q=' + encodeURIComponent(query) : ''}`);
+        if (data.stickers) {
+            stickerData = data.stickers;
+            renderStickers(stickerData);
+        }
+    } catch (e) {
+        // Silently fail, will retry on tab switch
+    }
+}
+
+function renderStickers(list) {
+    const grid = document.getElementById('stickerGrid');
+    grid.innerHTML = '';
+    if (list.length === 0) {
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:20px;">无匹配贴纸</div>';
+        return;
+    }
+    list.forEach(s => {
+        const item = document.createElement('div');
+        item.className = 'sticker-item';
+        if (selectedSticker === s.key) item.classList.add('selected');
+        // Use first char of name as visual
+        const emoji = getStickerEmoji(s.name);
+        item.innerHTML = `<span class="sticker-emoji">${emoji}</span>${escapeHtml(s.name)}`;
+        item.dataset.key = s.key;
+        item.onclick = () => selectSticker(s.key);
+        grid.appendChild(item);
+    });
+}
+
+function getStickerEmoji(name) {
+    const map = {
+        '六六六': '6️⃣', '我想开了': '🌸', '害羞': '😊', '比心': '💜', '委屈': '🥺',
+        '亲亲': '😘', '酷': '😎', '睡': '😴', '发呆': '😶', '可怜': '🥹',
+        '摊手': '🤷', '头大': '😵', '吓': '😱', '吐血': '🤮', '哼': '😤',
+        '嘿嘿': '😏', '头秃': '🦲', '暗中观察': '👀', '我酸了': '🍋', '打call': '📞',
+        '庆祝': '🎉', '奋斗': '💪', '惊讶': '😲', '疑问': '❓', '仔细分析': '🤔',
+        '撅嘴': '😗', '泪奔': '😭', '尊嘟假嘟': '🤨', '略略略': '😛', '困': '😪',
+        '折磨': '😫', '抠鼻': '👃', '鼓掌': '👏', '斜眼笑': '😏', '辣眼睛': '🌶️',
+        '哦哟': '🤭', '吃瓜': '🍉', '狗头': '🐶', '敬礼': '🫡', '哦': '😮',
+        '拿到红包': '🧧', '牛吖': '🐮', '贴贴': '🤗', '爱心': '❤️', '晚安': '🌙',
+        '太阳': '☀️', '柠檬': '🍋', '大冤种': '😅', '吐了': '🤮', '怒': '😠',
+        '玫瑰': '🌹', '凋谢': '🥀', '点赞': '👍', '握手': '🤝', '抱拳': '🙏',
+        'ok': '👌', '拳头': '👊', '鞭炮': '🧨', '烟花': '🎆',
+    };
+    return map[name] || '😀';
+}
+
+function filterStickers() {
+    loadStickers();
+}
+
+function selectSticker(key) {
+    selectedSticker = key;
+    document.querySelectorAll('.sticker-item').forEach(el => {
+        el.classList.toggle('selected', el.dataset.key === key);
+    });
+}
+
+async function sendSticker() {
+    if (!isConnected) {
+        showToast('⚠️ 请先连接', 'warning');
+        return;
+    }
+    if (!selectedSticker) {
+        showToast('请先选择一个贴纸', 'warning');
+        return;
+    }
+
+    const text = document.getElementById('stickerText').value.trim();
+    const atUser = document.getElementById('stickerAtUser').value.trim();
+    const count = parseInt(document.getElementById('stickerCount').value) || 1;
+    const interval = parseFloat(document.getElementById('stickerInterval').value) || 1.0;
+
+    const btn = document.getElementById('btnSendSticker');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> 发送中...';
+
+    try {
+        const body = { 
+            name: selectedSticker, 
+            text: text,
+            at_user: atUser,
+            count: count,
+            interval: interval
+        };
+
+        const data = await api('/api/send-sticker', {
+            method: 'POST',
+            body: body,
+        });
+
+        if (data.ok) {
+            showToast('✅ ' + (data.message || '贴纸已发送'), 'success');
+            if (count === 1) {
+                document.getElementById('stickerText').value = '';
+                document.getElementById('stickerAtUser').value = '';
+            }
+        } else {
+            showToast('❌ ' + (data.message || '发送失败'), 'error');
+        }
+    } catch (e) {
+        showToast('❌ 发送出错: ' + e.message, 'error');
+    } finally {
+        btn.innerHTML = '发送贴纸';
+        btn.disabled = false;
+    }
+}
+
+// ── Members ──
+async function loadMembers() {
+    const list = document.getElementById('memberList');
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)"><span class="spinner spinner-lg"></span><br>获取中...</div>';
+    try {
+        const data = await api('/api/members');
+        if (data.ok && data.members) {
+            allMembers = data.members;
+            renderMembers(allMembers);
+            showToast(`✅ 获取到 ${data.count} 个成员`, 'success');
+        } else {
+            list.innerHTML = '<div class="empty-state">获取失败: ' + (data.message || '未知错误') + '</div>';
+        }
+    } catch (e) {
+        list.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+    }
+}
+
+function renderMembers(members) {
+    const list = document.getElementById('memberList');
+    list.innerHTML = '';
+    if (members.length === 0) {
+        list.innerHTML = '<div class="empty-state">暂无成员数据</div>';
+        return;
+    }
+    members.forEach(m => {
+        const item = document.createElement('div');
+        item.className = 'member-item';
+        const avatar = (m.nick_name || m.user_id || '?')[0];
+        item.innerHTML = `
+            <div class="member-avatar">${escapeHtml(avatar)}</div>
+            <div class="member-info">
+                <div class="member-name">${escapeHtml(m.nick_name || '未知')}</div>
+                <div class="member-id">${escapeHtml(m.user_id || '')}</div>
+            </div>
+        `;
+        // Click to copy user ID
+        item.style.cursor = 'pointer';
+        item.title = '点击复制用户ID';
+        item.onclick = () => {
+            const userId = m.user_id || '';
+            if (userId) {
+                navigator.clipboard.writeText(userId).then(() => {
+                    showToast(`已复制 ${m.nick_name || userId} 的ID`, 'success', 2000);
+                }).catch(() => {});
+            }
+        };
+        list.appendChild(item);
+    });
+}
+
+function filterMembers() {
+    const query = document.getElementById('memberSearch').value.toLowerCase();
+    document.querySelectorAll('.member-item').forEach(el => {
+        const text = el.textContent.toLowerCase();
+        el.style.display = text.includes(query) ? 'flex' : 'none';
+    });
+}
+
+// ── User Management ──
+async function loadUsers() {
+    try {
+        const data = await api('/api/users');
+        if (data.users) {
+            allUsers = data.users;
+            renderUsers(allUsers);
+        }
+    } catch (e) {
+        // Silently fail
+    }
+}
+
+function renderUsers(users) {
+    const list = document.getElementById('userList');
+    list.innerHTML = '';
+    if (users.length === 0) {
+        list.innerHTML = '<div class="empty-state">暂无保存的用户</div>';
+        return;
+    }
+    users.forEach(u => {
+        const item = document.createElement('div');
+        item.className = 'user-item';
+        const avatar = (u.nickname || u.user_id || '?')[0];
+        item.innerHTML = `
+            <div class="user-avatar">${escapeHtml(avatar)}</div>
+            <div class="user-info">
+                <div class="user-name">${escapeHtml(u.nickname || '未知')}</div>
+                <div class="user-id">${escapeHtml(u.user_id || '')}</div>
+            </div>
+            <button class="btn btn-danger btn-small" onclick="deleteUser('${escapeHtml(u.user_id)}')">删除</button>
+        `;
+        // Click to fill in target fields
+        item.querySelector('.user-info').style.cursor = 'pointer';
+        item.querySelector('.user-info').onclick = () => {
+            document.getElementById('addUserId').value = u.user_id;
+            document.getElementById('addUserNick').value = u.nickname;
+        };
+        list.appendChild(item);
+    });
+}
+
+function filterUsers() {
+    const query = document.getElementById('userSearch').value.toLowerCase();
+    document.querySelectorAll('.user-item').forEach(el => {
+        const text = el.textContent.toLowerCase();
+        el.style.display = text.includes(query) ? 'flex' : 'none';
+    });
+}
+
+async function addUser() {
+    const userId = document.getElementById('addUserId').value.trim();
+    const nickname = document.getElementById('addUserNick').value.trim();
+    
+    if (!userId) {
+        showToast('用户ID不能为空', 'warning');
+        return;
+    }
+    
+    try {
+        const data = await api('/api/users', {
+            method: 'POST',
+            body: { user_id: userId, nickname: nickname || userId }
+        });
+        
+        if (data.ok) {
+            showToast('✅ 用户添加成功', 'success');
+            document.getElementById('addUserId').value = '';
+            document.getElementById('addUserNick').value = '';
+            loadUsers();
+        }
+    } catch (e) {
+        showToast('❌ 添加失败: ' + e.message, 'error');
+    }
+}
+
+async function deleteUser(userId) {
+    if (!confirm(`确定要删除用户 ${userId} 吗？`)) return;
+    
+    try {
+        const data = await api(`/api/users/${encodeURIComponent(userId)}`, {
+            method: 'DELETE'
+        });
+        
+        if (data.ok) {
+            showToast('✅ 用户删除成功', 'success');
+            loadUsers();
+        }
+    } catch (e) {
+        showToast('❌ 删除失败: ' + e.message, 'error');
+    }
+}
+
+// ── Advanced Features ──
+async function sendReply() {
+    if (!isConnected) {
+        showToast('⚠️ 请先连接', 'warning');
+        return;
+    }
+    
+    const index = parseInt(document.getElementById('replyIndex').value);
+    const text = document.getElementById('replyText').value.trim();
+    const atUser = document.getElementById('replyAtUser').value.trim();
+    const count = parseInt(document.getElementById('replyCount').value) || 1;
+    
+    if (!text) {
+        showToast('请输入回复内容', 'warning');
+        return;
+    }
+    
+    if (isNaN(index) || index < 0) {
+        showToast('请输入有效的消息序号', 'warning');
+        return;
+    }
+    
+    try {
+        const data = await api('/api/send-reply', {
+            method: 'POST',
+            body: {
+                index: index,
+                text: text,
+                at_user: atUser,
+                count: count,
+                interval: parseFloat(document.getElementById('settingInterval').value) || 1.0
+            }
+        });
+        
+        if (data.ok) {
+            showToast('✅ ' + (data.message || '回复成功'), 'success');
+            document.getElementById('replyText').value = '';
+        } else {
+            showToast('❌ ' + (data.message || '回复失败'), 'error');
+        }
+    } catch (e) {
+        showToast('❌ 回复出错: ' + e.message, 'error');
+    }
+}
+
+async function sendImage() {
+    if (!isConnected) {
+        showToast('⚠️ 请先连接', 'warning');
+        return;
+    }
+    
+    const imagePath = document.getElementById('imagePath').value.trim();
+    if (!imagePath) {
+        showToast('请输入图片路径', 'warning');
+        return;
+    }
+    
+    showToast('⚠️ 图片发送功能需要后端支持，请确保后端已实现图片上传逻辑', 'warning');
+    // 这里需要后端实现图片上传API
+    // 实际实现时应该调用类似 /api/send-image 的接口
+}
+
+async function sendAtAll() {
+    if (!isConnected) {
+        showToast('⚠️ 请先连接', 'warning');
+        return;
+    }
+    
+    const text = document.getElementById('atAllText').value.trim();
+    if (!text) {
+        showToast('请输入消息内容', 'warning');
+        return;
+    }
+    
+    if (!confirm('⚠️ 确定要艾特全体成员吗？这可能会打扰所有群成员！')) {
+        return;
+    }
+    
+    // 获取所有成员并批量艾特
+    try {
+        const membersData = await api('/api/members');
+        if (membersData.ok && membersData.members && membersData.members.length > 0) {
+            const memberIds = membersData.members.map(m => m.user_id).filter(id => id);
+            if (memberIds.length > 0) {
+                // 取前20个成员避免消息过长
+                const targetUsers = memberIds.slice(0, 20).map(id => `${id}:成员`);
+                const data = await api('/api/send', {
+                    method: 'POST',
+                    body: {
+                        mode: 'multi-at',
+                        text: text,
+                        target: targetUsers.join(',')
+                    }
+                });
+                
+                if (data.ok) {
+                    showToast('✅ 艾特全体发送成功', 'success');
+                    document.getElementById('atAllText').value = '';
+                } else {
+                    showToast('❌ 发送失败: ' + (data.message || '未知错误'), 'error');
+                }
+            } else {
+                showToast('❌ 未获取到成员列表', 'error');
+            }
+        } else {
+            showToast('❌ 请先获取成员列表', 'error');
+        }
+    } catch (e) {
+        showToast('❌ 发送出错: ' + e.message, 'error');
+    }
+}
+
+// ── Settings ──
+async function loadSettings() {
+    try {
+        const data = await api('/api/settings');
+        if (data) {
+            document.getElementById('settingGroupCode').value = data.group_code || '';
+            document.getElementById('settingInterval').value = data.interval || 1.0;
+            document.getElementById('settingAutoReply').checked = data.auto_reply_enabled || false;
+            document.getElementById('settingGroupReply').value = data.group_reply_text || '';
+            document.getElementById('settingC2cReply').value = data.c2c_reply_text || '';
+        }
+    } catch (e) {
+        // Silently fail
+    }
+}
+
+async function saveSettings() {
+    const body = {
+        group_code: document.getElementById('settingGroupCode').value.trim(),
+        interval: parseFloat(document.getElementById('settingInterval').value) || 1.0,
+        auto_reply_enabled: document.getElementById('settingAutoReply').checked,
+        group_reply_text: document.getElementById('settingGroupReply').value,
+        c2c_reply_text: document.getElementById('settingC2cReply').value,
+    };
+
+    try {
+        const data = await api('/api/settings', {
+            method: 'POST',
+            body: body,
+        });
+        if (data.ok) {
+            showToast('✅ 设置已保存', 'success');
+            // Update connection if group code changed
+            await updateStatus();
+        }
+    } catch (e) {
+        showToast('❌ 保存失败: ' + e.message, 'error');
+    }
+}
+
+// ── SSE Event Stream ──
+function setupSSE() {
+    const eventSource = new EventSource('/api/events');
+    eventSource.onmessage = function(event) {
+        try {
+            const msg = JSON.parse(event.data);
+            appendMessage(msg);
+        } catch (e) {
+            // Ignore heartbeats and parse errors
+        }
+    };
+    eventSource.onerror = function() {
+        // Will auto-reconnect
+        console.log('SSE连接错误，尝试重连...');
+    };
+}
+
+// ── Initialization ──
+document.addEventListener('DOMContentLoaded', function() {
+    updateStatus();
+    loadStickers();
+    loadUsers();
+    loadSettings();
+    setupSSE();
+
+    // Periodic status update (every 10 seconds)
+    setInterval(updateStatus, 10000);
+    
+    // Load recent messages on start
+    loadRecentMessages();
+});
+</script>
+</body>
+</html>
