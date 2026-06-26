@@ -3,17 +3,22 @@
 元宝 Bot 发送器
 """
 import asyncio
-import sys
 import json
 import hashlib
 import hmac
 import random
 import string
 import os
+import sys
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import requests
+from prompt_toolkit import PromptSession
+from prompt_toolkit.auto_suggest import AutoSuggest, Suggestion, AutoSuggestFromHistory
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.patch_stdout import patch_stdout
 
 # ── 日志配置：debug 信息写入 bot.log，不输出到控制台 ──
 logger = logging.getLogger("yuanbao_bot")
@@ -27,13 +32,171 @@ logger.addHandler(fh)
 # 确保 logger 不向根 logger 传播（避免控制台输出）
 logger.propagate = False
 
+# ── AutoSuggest: 命令自动补全（类似 omz 的灰色提示，按 → 接受） ──
+COMMANDS = sorted([
+    "/at", "/spam", "/sticker_spam", "/atspam", "/spamat",
+    "/multiat", "/atall", "/athuman", "/atbot",
+    "/image", "/file", "/reply", "/replyspam",
+    "/group", "/users", "/adduser", "/deluser",
+    "/sticker", "/stickerlist", "/stickerfind",
+    "/dm", "/dmspam", "/members", "/myid", "/recent",
+    "/paste", "/big", "/auto", "/reconnect", "/interval",
+    "/help", "/exit",
+], key=len, reverse=True)
+
+
+class CommandAutoSuggest(AutoSuggest):
+    """输入 / 开头时灰色显示完整命令名（类似 oh-my-zsh 的补全提示）"""
+    def __init__(self) -> None:
+        self._history_suggest = AutoSuggestFromHistory()
+
+    def get_suggestion(self, buffer, document):
+        text = document.text_before_cursor.strip()
+        if text.startswith("/"):
+            for cmd in COMMANDS:
+                if cmd.startswith(text) and cmd != text:
+                    return Suggestion(cmd[len(text):])
+            return None
+        # 非命令输入使用历史建议
+        return self._history_suggest.get_suggestion(buffer, document)
+
+
+# ── 自定义快捷键：Ctrl+Q 接受自动补全 ──
+_kb = KeyBindings()
+
+
+@_kb.add("c-q")
+def _accept_suggestion(event):
+    """Ctrl+Q 接受自动补全建议（类似 omz 的 →）"""
+    buffer = event.app.current_buffer
+    if buffer.suggestion:
+        buffer.insert_text(buffer.suggestion.text)
+
+
+@_kb.add("c-d")
+def _discard_line(event):
+    """Ctrl+D 丢弃当前行输入（不提交），换到下一行新提示符"""
+    event.app.exit(result="")  # 返回空字符串，文字保留在屏幕上，不提交
+
+
+_prompt_session: Optional[PromptSession] = None
+
 
 async def async_input(prompt: str = "") -> str:
-    """异步版本的 input()，避免阻塞事件循环"""
-    if prompt:
-        print(prompt, end="", flush=True)
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, sys.stdin.readline)
+    """异步读取终端输入，正确处理中文等宽字符编辑。"""
+    global _prompt_session
+    if _prompt_session is None:
+        _prompt_session = PromptSession(auto_suggest=CommandAutoSuggest(), key_bindings=_kb)
+    with patch_stdout():
+        return await _prompt_session.prompt_async(ANSI(prompt))
+
+
+# ── ESC 中断检测（用于刷屏过程）─────────────────
+
+_esc_pressed = False  # 全局标志，被 ESC 中断设为 True
+_esc_reader_task: Optional[asyncio.Task] = None
+
+
+def _check_esc() -> bool:
+    """检查 ESC 是否被按下（仅读取全局标志，非阻塞）"""
+    global _esc_pressed
+    return _esc_pressed
+
+
+def _reset_esc_flag():
+    """重置 ESC 中断标志（每次刷屏前调用）"""
+    global _esc_pressed
+    _esc_pressed = False
+
+
+async def _esc_reader():
+    """后台任务：持续从标准输入读取，检测 ESC 键。
+    将终端设为 cbreak 模式，使单个按键立即可读。
+    """
+    global _esc_pressed
+    fd = sys.stdin.fileno()
+    # ── 保存终端属性，设为 cbreak 模式（逐键发送，不等待回车） ──
+    old_attr = None
+    if os.isatty(fd):
+        import termios, tty
+        old_attr = termios.tcgetattr(fd)
+        tty.setcbreak(fd, termios.TCSANOW)
+    try:
+        loop = asyncio.get_running_loop()
+        try:
+            # 方案1: add_reader — 事件循环监听 fd 可读
+            def _on_stdin_readable():
+                global _esc_pressed
+                try:
+                    ch = sys.stdin.buffer.read(1)
+                    if ch == b'\x1b':
+                        _esc_pressed = True
+                except Exception:
+                    pass
+            loop.add_reader(fd, _on_stdin_readable)
+            while True:
+                await asyncio.sleep(3600)
+        except NotImplementedError:
+            # 方案2: fallback — 线程阻塞读
+            try:
+                while True:
+                    result = await loop.run_in_executor(None, sys.stdin.buffer.read, 1)
+                    if result == b'\x1b':
+                        _esc_pressed = True
+            except asyncio.CancelledError:
+                pass
+    except asyncio.CancelledError:
+        pass
+    finally:
+        # ── 恢复终端属性 ──
+        if old_attr is not None:
+            try:
+                termios.tcsetattr(fd, termios.TCSANOW, old_attr)
+            except Exception:
+                pass
+        # 确保 add_reader 被移除
+        try:
+            loop = asyncio.get_running_loop()
+            loop.remove_reader(fd)
+        except Exception:
+            pass
+
+
+async def _ensure_esc_reader():
+    """确保 ESC 读取后台任务已启动"""
+    global _esc_reader_task
+    if _esc_reader_task is None or _esc_reader_task.done():
+        _esc_reader_task = asyncio.create_task(_esc_reader())
+
+
+async def _stop_esc_reader():
+    """停止 ESC 读取后台任务（终端属性由 _esc_reader 的 finally 自动恢复）"""
+    global _esc_reader_task
+    if _esc_reader_task and not _esc_reader_task.done():
+        _esc_reader_task.cancel()
+        try:
+            await _esc_reader_task
+        except asyncio.CancelledError:
+            pass
+        _esc_reader_task = None
+
+
+async def _sleep_with_esc(duration: float, poll_interval: float = 0.1) -> bool:
+    """睡眠 duration 秒，期间定期检测 ESC 键。
+    返回 True = 正常完成睡眠，False = 被 ESC 中断。
+    """
+    if duration <= 0:
+        return True
+    elapsed = 0.0
+    while elapsed < duration:
+        step = min(poll_interval, duration - elapsed)
+        await asyncio.sleep(step)
+        elapsed += step
+        if _esc_pressed:
+            return False
+    return True
+
+
 import websockets
 import struct
 
@@ -327,10 +490,7 @@ WS_URL = app_config.get('WS_URL', '')
 # 其他可能用到的配置
 DEFAULT_GROUP_CODE = app_config.get('DEFAULT_GROUP_CODE', '')
 SPAM_INTERVAL = app_config.get('SPAM_INTERVAL', 1.0)
-AUTO_REPLY_GROUP_TEXT = app_config.get('AUTO_REPLY_GROUP_TEXT', '')
-AUTO_REPLY_C2C_TEXT = app_config.get('AUTO_REPLY_C2C_TEXT', '')
-AUTO_REPLY_RULES = app_config.get('AUTO_REPLY_RULES', [])
-DEFAULT_REPLY = app_config.get('DEFAULT_REPLY', '')
+AUTO_DEFAULT_TEXT = app_config.get('AUTO_DEFAULT_TEXT', '啊，对对对，你说的都对')
 
 # 协议常量
 CMD_TYPE_REQUEST = 0
@@ -830,6 +990,10 @@ class SpamSender:
         self.msg_cache: List[dict] = []
         # 推送消息回调: async callable(push_json: dict) -> None
         self.on_push_message: Optional[callable] = None
+        # /auto 自动回复开关（None=关闭，字符串=回复文本）
+        self.auto_reply_text: Optional[str] = None
+        # 自动重连状态
+        self._reconnecting: bool = False
 
     # 内置贴纸数据
     STICKERS = {
@@ -1523,14 +1687,23 @@ class SpamSender:
 
 
     async def send_multi_at_message(self, text: str, at_users: list) -> bool:
-        """发送批量艾特消息
+        """发送批量艾特消息 — 自动分片，每 20 人一条消息
+        每个批次都有文本内容，避免服务端静默丢弃只有 @ 的消息
         at_users: [(user_id, nickname), ...]
         """
         if not self.connected or not self.ws:
             return False
+        CHUNK_SIZE = 20
+        total = len(at_users)
         try:
-            msg = self._build_multi_at_message(text, at_users)
-            await self.ws.send(msg)
+            for i in range(0, total, CHUNK_SIZE):
+                chunk = at_users[i:i + CHUNK_SIZE]
+                # 第1批带完整文本，后续批次用短占位符防止刷屏
+                batch_text = text if i == 0 else "—"
+                msg = self._build_multi_at_message(batch_text, chunk)
+                await self.ws.send(msg)
+                if i + CHUNK_SIZE < total:
+                    await asyncio.sleep(0.3)
             return True
         except Exception:
             return False
@@ -1556,19 +1729,29 @@ class SpamSender:
 
     async def spam_with_at(self, text: str, count: int, at_user: str = None, at_nickname: str = None,
                            interval: float = 1.0, progress_callback=None):
-        """刷屏+艾特核心功能"""
+        """刷屏+艾特核心功能（支持 ESC 中断）"""
+        await _ensure_esc_reader()
+        _reset_esc_flag()
         success_count = 0
         fail_count = 0
-        for i in range(count):
-            ok = await self.send_group_message(text, at_user, at_nickname)
-            if ok:
-                success_count += 1
-            else:
-                fail_count += 1
-            if progress_callback:
-                progress_callback(i + 1, count, ok)
-            if i < count - 1:
-                await asyncio.sleep(interval)
+        try:
+            for i in range(count):
+                if _check_esc():
+                    print("\n[ESC 中断] 刷屏已停止")
+                    break
+                ok = await self.send_group_message(text, at_user, at_nickname)
+                if ok:
+                    success_count += 1
+                else:
+                    fail_count += 1
+                if progress_callback:
+                    progress_callback(i + 1, count, ok)
+                if i < count - 1:
+                    if not await _sleep_with_esc(interval):
+                        print("\n[ESC 中断] 刷屏已停止")
+                        break
+        finally:
+            await _stop_esc_reader()
         return success_count, fail_count
 
     async def _heartbeat(self):
@@ -1585,7 +1768,11 @@ class SpamSender:
                 ping_msg = self.codec.encode_conn_msg(head)
                 await self.ws.send(ping_msg)
             except:
+                self.connected = False
                 break
+        # 心跳异常断开，触发自动重连
+        if not self._reconnecting:
+            await self._auto_reconnect()
 
     async def _receive_loop(self):
         """接收循环：处理响应消息，匹配 pending_requests"""
@@ -1693,22 +1880,95 @@ class SpamSender:
                             future.set_result({"msg_id": msg_id, "code": 0, "message": "", "member_list": []})
         except Exception as e:
             logger.debug("_receive_loop 异常: %s", e)
+        finally:
+            self.connected = False
+        # 接收循环异常断开，触发自动重连
+        if not self._reconnecting:
+            await self._auto_reconnect()
 
     async def disconnect(self):
         self.connected = False
         if self.ws:
-            await self.ws.close()
+            try:
+                await asyncio.wait_for(self.ws.close(), timeout=1.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError, KeyboardInterrupt):
+                pass
+            except Exception as e:
+                logger.debug("断开连接异常: %s", e)
+
+    async def auto_fetch_members(self) -> bool:
+        """静默获取群成员列表并保存到 user_db，不输出到终端"""
+        result = await self.send_get_members_request()
+        if result and result.get("code") == 0:
+            member_list = result.get("member_list", [])
+            for m in member_list:
+                uid = m.get("user_id", "")
+                nick = m.get("nick_name", "")
+                if uid and uid not in self.user_db and nick:
+                    self.user_db[uid] = nick
+            return True
+        return False
+
+    async def _auto_reconnect(self) -> bool:
+        """自动重连：断线后自动重新连接并恢复心跳/接收循环"""
+        if self._reconnecting:
+            return False
+        self._reconnecting = True
+        self.connected = False
+
+        # 关闭旧的 WebSocket 连接
+        if self.ws:
+            try:
+                await asyncio.wait_for(self.ws.close(), timeout=1.0)
+            except Exception:
+                pass
+            self.ws = None
+
+        print("\n[重连] 连接已断开，正在尝试自动重连...")
+        delays = [1, 2, 4, 8, 16]
+        for delay in delays:
+            print(f"[重连] 等待 {delay}s 后重试...")
+            await asyncio.sleep(delay)
+
+            # 重新签票（Token 可能已过期）
+            self.token = None
+            if not self.sign_token():
+                print(f"[重连] 签票失败，{delay}s 后重试")
+                continue
+
+            # 重新建立 WebSocket 连接
+            try:
+                self.ws = await websockets.connect(WS_URL)
+                auth_msg = self._build_auth_bind_msg()
+                await self.ws.send(auth_msg)
+                response = await self.ws.recv()
+                self.connected = True
+                print(f"[重连] WebSocket 重连成功!")
+
+                # 重启心跳和接收循环
+                asyncio.create_task(self._heartbeat())
+                asyncio.create_task(self._receive_loop())
+
+                self._reconnecting = False
+                return True
+            except Exception as e:
+                print(f"[重连] 连接失败: {e}")
+                self.ws = None
+
+        self._reconnecting = False
+        print("[重连] 已达最大重试次数，重连失败，请手动执行 /reconnect")
+        return False
 
 
 def print_banner():
-    print("=" * 56)
+    print("\033[96m=" * 56)
     print("  元宝 Bot 发送器")
     print("=" * 56)
     print()
 
 
 def print_help():
-    print("命令列表:")
+    print("\033[96m命令列表:")
     print("  <文字>            - 发送普通消息")
     print("  /at 用户ID 内容   - 艾特指定用户发送")
     print("  /spam 内容 次数   - 普通刷屏")
@@ -1734,8 +1994,18 @@ def print_help():
     print("  /dm 用户ID 内容   - 发送私聊消息")
     print("  /dmspam 用户ID 内容 次数 - 私聊刷屏")
     print("  /members          - 获取当前群成员列表")
+    print("  /members echo     - 获取并发送成员列表到群")
+    print("  /members echo human - 仅发送人类成员")
+    print("  /members echo bot - 仅发送 Bot 成员")
     print("  /myid 昵称        - 在成员列表中搜索自己的ID（填你的群昵称）")
     print("  /recent [N]       - 查看最近 N 条消息（默认10条）")
+    print("  /paste            - 多行粘贴模式，输入 /end 发送")
+    print("  /big 字号 内容    - 发送放大 LaTeX 文本")
+    print("  /reconnect        - 手动重新连接 WebSocket（断线后使用）")
+    print("  /auto             - 查看自动回复状态")
+    print("  /auto on          - 开启自动回复（默认文本）")
+    print("  /auto on <文本>   - 开启自动回复（自定义回复文本）")
+    print("  /auto off         - 关闭自动回复")
     print("  /help             - 显示帮助")
     print("  /exit             - 退出")
     print()
@@ -1771,10 +2041,43 @@ async def interactive_mode():
 
     asyncio.create_task(sender._receive_loop())
 
-    while sender.connected:
+    # ── 首次进入自动获取群成员（静默保存到数据库，不输出） ──
+    print("正在自动获取群成员列表...")
+    if await sender.auto_fetch_members():
+        print(f"已缓存 {len(sender.user_db)} 名成员昵称")
+    else:
+        print("自动获取群成员列表失败，可使用 /members 手动获取")
+
+    # ── /ok 自动回复回调 ──
+    async def _auto_ok_callback(push_json: dict, cache_entry: dict):
+        if not sender.auto_reply_text:
+            return
+        # 不回复自己的消息
+        if cache_entry["sender_id"] == sender.bot_id:
+            return
+        ref_msg_id = cache_entry["msg_id"]
+        at_user = cache_entry["sender_id"]
+        at_nick = cache_entry["sender_name"]
+        reply_text = sender.auto_reply_text
+        msg = sender._build_reply_msg(reply_text, ref_msg_id, at_user, at_nick)
         try:
-            raw = await async_input("> ")
-            raw = raw.strip()
+            await sender.ws.send(msg)
+        except Exception:
+            pass
+
+    sender.on_push_message = _auto_ok_callback
+
+    while True:
+        # 如果连接断开且不在重连中，提示用户
+        if not sender.connected:
+            if not sender._reconnecting:
+                print("\033[93m[提示] 连接已断开，正在自动重连...\033[0m")
+            await asyncio.sleep(1)
+            continue
+
+        try:
+            raw = await async_input("\033[96myuanbao>\033[0m")
+            raw = raw.rstrip("\r\n")
             if not raw:
                 continue
 
@@ -1788,12 +2091,93 @@ async def interactive_mode():
                 print_help()
                 continue
 
+            # ===== /reconnect 手动重连 =====
+            if raw == "/reconnect":
+                if sender.connected:
+                    print("连接正常，无需重连")
+                else:
+                    print("正在手动重连...")
+                    asyncio.create_task(sender._auto_reconnect())
+                continue
+
+            # ===== /auto 自动回复开关 =====
+            if raw.startswith("/auto "):
+                arg = raw[6:].strip()
+                if arg == "off":
+                    sender.auto_reply_text = None
+                    print("自动回复已关闭")
+                elif arg.startswith("on"):
+                    rest = arg[2:].strip()
+                    if rest:
+                        sender.auto_reply_text = rest
+                        print(f"自动回复已开启：自定义回复文本 -> \"{rest}\"")
+                    else:
+                        sender.auto_reply_text = AUTO_DEFAULT_TEXT
+                        print(f"自动回复已开启：默认回复文本 -> \"{AUTO_DEFAULT_TEXT}\"")
+                else:
+                    print("格式: /auto on [回复文本]  或  /auto off")
+                continue
+            if raw == "/auto":
+                if sender.auto_reply_text:
+                    print(f"自动回复已开启，当前文本: \"{sender.auto_reply_text}\"")
+                else:
+                    print("自动回复已关闭")
+                continue
+
+            # 多行粘贴模式
+            if raw == "/paste":
+                print("进入多行粘贴模式：输入 /end 发送，输入 /cancel 取消")
+                lines = []
+                while True:
+                    try:
+                        line = await async_input("\033[93mpaste>\033[0m")
+                        line = line.rstrip("\r\n")
+                    except KeyboardInterrupt:
+                        print("\n已取消多行粘贴")
+                        lines = []
+                        break
+                    if line == "/end":
+                        message = "\n".join(lines)
+                        if not message:
+                            print("内容为空，已取消")
+                        elif await sender.send_group_message(message):
+                            print(f"已发送多行消息: {message[:50]}")
+                        else:
+                            print("发送失败")
+                        break
+                    if line == "/cancel":
+                        print("已取消多行粘贴")
+                        break
+                    lines.append(line)
+                continue
+
+            # 放大 LaTeX 文本
+            if raw.startswith("/big "):
+                parts = raw[5:].split(" ", 1)
+                if len(parts) == 2 and parts[0] and parts[1]:
+                    size, content = parts
+                    message = f"$\\scalebox{{{size}}}{{\\textcolor{{black}}{{{content}}}}}$"
+                    if await sender.send_group_message(message):
+                        print(f"已发送: {message[:50]}")
+                    else:
+                        print("发送失败")
+                else:
+                    print("格式: /big 字号 内容")
+                continue
+
             # 切换目标群
             if raw.startswith("/group "):
                 new_group = raw[7:].strip()
                 if new_group:
                     sender.group_code = new_group
-                    print(f"目标群已切换为: {new_group}")
+                    # 切换群后清空用户缓存并自动获取新群成员
+                    sender.user_db.clear()
+                    print(f"\033[96m目标群已切换为: {new_group}")
+                    print("正在自动获取新群成员列表...")
+                    if await sender.auto_fetch_members():
+                        print(f"已缓存 {len(sender.user_db)} 名成员昵称")
+                    else:
+                        print("自动获取失败，可使用 /members 手动获取")
                 else:
                     print(f"当前目标群: {sender.group_code}")
                 continue
@@ -1931,7 +2315,7 @@ async def interactive_mode():
                     print(f"  消息内容: {content}")
                     print(f"  发送次数: {count}")
                     print(f"  发送间隔: {spam_interval}秒")
-                    print(f"  按 Ctrl+C 随时停止")
+                    print(f"  按 Ctrl+C 或 ESC 随时停止")
                     print("=" * 22)
 
                     def make_progress(start_time):
@@ -1957,18 +2341,64 @@ async def interactive_mode():
                 continue
 
             # 普通艾特
+            # 格式: /at 用户ID/昵称 消息内容
             if raw.startswith("/at "):
                 parts = raw[4:].split(" ", 1)
                 if len(parts) == 2:
-                    at_user, message = parts
-                    at_nick = sender.user_db.get(at_user, at_user)
+                    at_target, message = parts
+
+                    # 先尝试直接当作 user_id 查找
+                    if at_target in sender.user_db:
+                        at_user = at_target
+                        at_nick = sender.user_db[at_target]
+
+                    # 否则当作昵称反向查找
+                    elif not sender.user_db:
+                        print("用户数据库为空，请先使用 /members 获取群成员列表")
+                        continue
+
+                    else:
+                        # 反向查找：nick 映射到 uid 列表
+                        matching = [(uid, nick) for uid, nick in sender.user_db.items()
+                                    if nick == at_target]
+
+                        if len(matching) == 0:
+                            # 尝试模糊匹配（忽略大小写）
+                            at_target_lower = at_target.lower()
+                            matching = [(uid, nick) for uid, nick in sender.user_db.items()
+                                        if nick.lower() == at_target_lower]
+                            if not matching:
+                                matching = [(uid, nick) for uid, nick in sender.user_db.items()
+                                            if at_target_lower in nick.lower()]
+
+                        if len(matching) == 0:
+                            print(f"未找到昵称/ID 匹配 '{at_target}'，请先用 /members 获取最新列表")
+                            continue
+                        elif len(matching) == 1:
+                            at_user, at_nick = matching[0]
+                            print(f"  反向查找: 昵称 '{at_target}' → ID '{at_user}'")
+                        else:
+                            # 多个匹配 → "元宝" 特判走默认 ID
+                            nick_names = [n for _, n in matching]
+                            if at_target == "元宝":
+                                at_user = "szUvRH8s4ekettawNjDREmAG4W7h+Lhb8Sy9tq/otZU="
+                                at_nick = "元宝"
+                                print(f"  多个昵称 '{at_target}' 匹配，默认使用主元宝 ID")
+                            else:
+                                lines = [f"昵称 '{at_target}' 匹配到 {len(matching)} 个用户:"]
+                                for uid, nick in matching:
+                                    lines.append(f"  {nick} ({uid})")
+                                lines.append("请使用准确的 ID 来艾特")
+                                print("\n".join(lines))
+                                continue
+
                     message = message.replace("\\n", "\n")
                     if await sender.send_group_message(message, at_user, at_nick):
                         print(f"艾特消息已发送 -> @{at_nick}")
                     else:
                         print("发送失败")
                 else:
-                    print("格式: /at 用户ID 消息内容")
+                    print("格式: /at 用户ID/昵称 消息内容")
                 continue
 
             # 普通刷屏（纯文字）
@@ -1996,17 +2426,27 @@ async def interactive_mode():
                         print(f"未找到贴纸 '{sticker_name}'，使用 /stickerlist 查看所有贴纸")
                         continue
                     print(f"贴纸刷屏: '{sticker_name}' {count} 次, 间隔 {spam_interval}秒")
+                    await _ensure_esc_reader()
+                    _reset_esc_flag()
                     success, failed = 0, 0
-                    for i in range(count):
-                        ok = await sender.send_sticker_message(sticker_name)
-                        if ok:
-                            success += 1
-                        else:
-                            failed += 1
-                        print(f"  [{i+1}/{count}] {'OK' if ok else 'FAIL'}")
-                        if i < count - 1:
-                            await asyncio.sleep(spam_interval)
-                    print(f"完成! 成功={success}, 失败={failed}")
+                    try:
+                        for i in range(count):
+                            if _check_esc():
+                                print("\n[ESC 中断] 贴纸刷屏已停止")
+                                break
+                            ok = await sender.send_sticker_message(sticker_name)
+                            if ok:
+                                success += 1
+                            else:
+                                failed += 1
+                            print(f"  [{i+1}/{count}] {'OK' if ok else 'FAIL'}")
+                            if i < count - 1:
+                                if not await _sleep_with_esc(spam_interval):
+                                    print("\n[ESC 中断] 贴纸刷屏已停止")
+                                    break
+                        print(f"完成! 成功={success}, 失败={failed}")
+                    finally:
+                        await _stop_esc_reader()
                 else:
                     print("格式: /sticker_spam 贴纸名 次数")
                 continue
@@ -2069,9 +2509,23 @@ async def interactive_mode():
                 continue
 
             # ===== 艾特全体成员 =====
-            # 格式: /atall 内容
+            # 格式: /atall 内容 [人数]
+            # 例: /atall hello       → 艾特全体
+            #     /atall hello 50    → 只艾特前 50 人
             if raw.startswith("/atall "):
-                message = raw[7:].strip().replace("\n", "\n")
+                # 解析可选人数参数（末尾数字）
+                rest = raw[7:].strip()
+                max_count = None
+                parts = rest.rsplit(None, 1)
+                if len(parts) == 2 and parts[1].isdigit():
+                    message = parts[0]
+                    max_count = int(parts[1])
+                else:
+                    message = rest
+                if not message:
+                    print("格式: /atall 内容 [人数]")
+                    continue
+                message = message.replace("\n", "\n")
                 # 获取群成员列表
                 result = await sender.send_get_members_request()
                 if result and result.get("code") == 0:
@@ -2084,8 +2538,14 @@ async def interactive_mode():
                         utype = m.get("user_type", 0)
                         if uid != sender.bot_id and utype != 3:  # 不艾特自己和其他 Bot
                             at_users.append((uid, nick))
+                    # 裁剪到指定人数
+                    if max_count is not None and max_count < len(at_users):
+                        at_users = at_users[:max_count]
                     if at_users:
-                        print(f"正在艾特 {len(at_users)} 位成员...")
+                        total = len(at_users)
+                        batches = (total + 19) // 20
+                        limit_info = f"（限前 {max_count} 人）" if max_count else ""
+                        print(f"正在艾特 {total} 位成员{limit_info}（分 {batches} 批发送）...")
                         if await sender.send_multi_at_message(message, at_users):
                             print(f"艾特全体成员已发送!")
                         else:
@@ -2096,25 +2556,137 @@ async def interactive_mode():
                     print("获取成员列表失败")
                 continue
 
+            # ===== 艾特人类成员 =====
+            # 格式: /athuman 内容
+            if raw.startswith("/athuman "):
+                message = raw[9:].strip()
+                if not message:
+                    print("格式: /athuman 内容")
+                    continue
+                message = message.replace("\n", "\n")
+                result = await sender.send_get_members_request()
+                if result and result.get("code") == 0:
+                    member_list = result.get("member_list", [])
+                    at_users = []
+                    for m in member_list:
+                        uid = m.get("user_id", "")
+                        nick = m.get("nick_name", "")
+                        utype = m.get("user_type", 0)
+                        if uid != sender.bot_id and utype != 3:
+                            at_users.append((uid, nick))
+                    if at_users:
+                        total = len(at_users)
+                        batches = (total + 19) // 20
+                        print(f"正在艾特 {total} 位人类成员（分 {batches} 批发送）...")
+                        if await sender.send_multi_at_message(message, at_users):
+                            print(f"艾特人类成员已发送!")
+                        else:
+                            print("发送失败")
+                    else:
+                        print("没有可艾特的人类成员")
+                else:
+                    print("获取成员列表失败")
+                continue
+
+            # ===== 艾特 Bot =====
+            # 格式: /atbot 内容
+            if raw.startswith("/atbot "):
+                message = raw[7:].strip()
+                if not message:
+                    print("格式: /atbot 内容")
+                    continue
+                message = message.replace("\n", "\n")
+                result = await sender.send_get_members_request()
+                if result and result.get("code") == 0:
+                    member_list = result.get("member_list", [])
+                    at_users = []
+                    for m in member_list:
+                        uid = m.get("user_id", "")
+                        nick = m.get("nick_name", "")
+                        utype = m.get("user_type", 0)
+                        if uid != sender.bot_id and utype == 3:
+                            at_users.append((uid, nick))
+                    if at_users:
+                        total = len(at_users)
+                        batches = (total + 19) // 20
+                        print(f"正在艾特 {total} 个 Bot（分 {batches} 批发送）...")
+                        if await sender.send_multi_at_message(message, at_users):
+                            print(f"艾特 Bot 已发送!")
+                        else:
+                            print("发送失败")
+                    else:
+                        print("没有可艾特的 Bot")
+                else:
+                    print("获取成员列表失败")
+                continue
+
             # ===== 获取群成员列表 =====
-            if raw == "/members":
+            if raw == "/members" or raw.startswith("/members "):
+                parts = raw.split()
+                echo_mode = False
+                filter_type = None
+                if len(parts) >= 2:
+                    if parts[1] == "echo":
+                        echo_mode = True
+                        if len(parts) >= 3:
+                            if parts[2] == "human":
+                                filter_type = "human"
+                            elif parts[2] == "bot":
+                                filter_type = "bot"
+                            else:
+                                print(f"未知过滤参数: {parts[2]}，支持 human/bot")
+                                continue
+
                 print("正在获取群成员列表...")
                 result = await sender.send_get_members_request()
                 if result and result.get("code") == 0:
                     member_list = result.get("member_list", [])
-                    print(f"\n群成员列表 (共 {len(member_list)} 人):")
-                    print("-" * 56)
+
+                    if filter_type == "human":
+                        member_list = [m for m in member_list if m.get("user_type", 0) != 3]
+                    elif filter_type == "bot":
+                        member_list = [m for m in member_list if m.get("user_type", 0) == 3]
+
+                    # 构建显示文本
+                    utype_map = {1: "成员", 2: "管理员", 3: "Bot"}
+                    lines = [f"群成员列表 (共 {len(member_list)} 人):"]
+                    lines.append("-" * 56)
                     for i, m in enumerate(member_list, 1):
                         uid = m.get("user_id", "")
                         nick = m.get("nick_name", "")
                         utype = m.get("user_type", 0)
-                        utype_str = {1: "成员", 2: "管理员", 3: "Bot"}.get(utype, f"未知({utype})")
-                        print(f"  {i:3d}. {nick} ({uid}) [{utype_str}]")
+                        utype_str = utype_map.get(utype, f"未知({utype})")
+                        lines.append(f"  {i:3d}. {nick} ({uid}) [{utype_str}]")
                         # 自动保存到用户数据库
                         if uid and uid not in sender.user_db and nick:
                             sender.user_db[uid] = nick
-                    print("-" * 56)
-                    print(f"共 {len(member_list)} 名成员，已自动保存昵称到用户数据库")
+                    lines.append("-" * 56)
+                    lines.append(f"共 {len(member_list)} 名成员，已自动保存昵称到用户数据库")
+
+                    output = "\n".join(lines)
+                    print(output)
+
+                    if echo_mode:
+                        # 群消息按 20 人分批发
+                        CHUNK = 20
+                        total = len(member_list)
+                        batches = (total + CHUNK - 1) // CHUNK
+                        print(f"\n正在发送成员列表到群（分 {batches} 批）...")
+                        for batch_idx in range(batches):
+                            start = batch_idx * CHUNK
+                            end = min(start + CHUNK, total)
+                            chunk = member_list[start:end]
+                            label = f"群成员列表 {start+1}-{end}/{total}:"
+                            msg_lines = [label]
+                            for m in chunk:
+                                nick = m.get("nick_name", "")
+                                uid = m.get("user_id", "")
+                                utype = m.get("user_type", 0)
+                                utype_str = utype_map.get(utype, f"未知({utype})")
+                                msg_lines.append(f"{nick}({uid}) [{utype_str}]")
+                            await sender.send_group_message("\n".join(msg_lines))
+                            await asyncio.sleep(0.3)
+                        print(f"已发送 {batches} 条消息到群 ({sender.group_code})")
                 elif result:
                     print(f"获取失败: code={result.get('code')}, {result.get('message', '')}")
                 else:
@@ -2127,11 +2699,15 @@ async def interactive_mode():
                 if not nickname:
                     print("格式: /myid 你的群昵称")
                     continue
-                print(f"正在获取群成员列表，搜索昵称 '{nickname}'...")
+                print(f"正在获取群成员列表，搜索昵称 '{nickname}'（忽略大小写）...")
                 result = await sender.send_get_members_request()
                 if result and result.get("code") == 0:
                     member_list = result.get("member_list", [])
-                    found = [m for m in member_list if nickname in m.get("nick_name", "")]
+                    query = nickname.casefold()
+                    found = [
+                        m for m in member_list
+                        if query in m.get("nick_name", "").casefold()
+                    ]
                     if found:
                         print(f"\n找到 {len(found)} 个匹配的成员:")
                         for m in found:
@@ -2140,7 +2716,7 @@ async def interactive_mode():
                             print(f"  身份:   {['未知','成员','管理员','Bot'][m.get('user_type',0)] if m.get('user_type',0) in [1,2,3] else '未知'}")
                             print()
                     else:
-                        print(f"未找到昵称包含 '{nickname}' 的成员")
+                        print(f"未找到昵称包含 '{nickname}' 的成员（已忽略大小写）")
                         print("提示: 可以使用 /members 查看所有成员，或输入完整的群昵称")
                 elif result:
                     print(f"获取失败: code={result.get('code')}, {result.get('message', '')}")
@@ -2281,22 +2857,32 @@ async def interactive_mode():
                     print(f"  回复内容: {reply_text[:50]}")
                     print(f"  发送次数: {count}")
                     print(f"  发送间隔: {spam_interval}秒")
-                    print(f"  按 Ctrl+C 随时停止")
+                    print(f"  按 Ctrl+C 或 ESC 随时停止")
                     print("=" * 22)
                     
+                    await _ensure_esc_reader()
+                    _reset_esc_flag()
                     success, failed = 0, 0
-                    for i in range(count):
-                        msg = sender._build_reply_msg(reply_text, ref_msg_id)
-                        try:
-                            await sender.ws.send(msg)
-                            success += 1
-                            print(f"  [{i+1}/{count}] OK")
-                        except Exception as e:
-                            failed += 1
-                            print(f"  [{i+1}/{count}] FAIL: {e}")
-                        if i < count - 1:
-                            await asyncio.sleep(spam_interval)
-                    print(f"\n完成! 成功={success}, 失败={failed}")
+                    try:
+                        for i in range(count):
+                            if _check_esc():
+                                print("\n[ESC 中断] 引用刷屏已停止")
+                                break
+                            msg = sender._build_reply_msg(reply_text, ref_msg_id)
+                            try:
+                                await sender.ws.send(msg)
+                                success += 1
+                                print(f"  [{i+1}/{count}] OK")
+                            except Exception as e:
+                                failed += 1
+                                print(f"  [{i+1}/{count}] FAIL: {e}")
+                            if i < count - 1:
+                                if not await _sleep_with_esc(spam_interval):
+                                    print("\n[ESC 中断] 引用刷屏已停止")
+                                    break
+                        print(f"\n完成! 成功={success}, 失败={failed}")
+                    finally:
+                        await _stop_esc_reader()
                 else:
                     print("格式: /replyspam 序号 内容 次数")
                 continue
@@ -2314,19 +2900,29 @@ async def interactive_mode():
                     print(f"  消息内容: {content}")
                     print(f"  发送次数: {count}")
                     print(f"  发送间隔: {spam_interval}秒")
-                    print(f"  按 Ctrl+C 随时停止")
+                    print(f"  按 Ctrl+C 或 ESC 随时停止")
                     print("=" * 22)
+                    await _ensure_esc_reader()
+                    _reset_esc_flag()
                     success, failed = 0, 0
-                    for i in range(count):
-                        ok = await sender.send_dm_message(to_user, content)
-                        if ok:
-                            success += 1
-                        else:
-                            failed += 1
-                        print(f"  [{i+1}/{count}] {'OK' if ok else 'FAIL'}")
-                        if i < count - 1:
-                            await asyncio.sleep(spam_interval)
-                    print(f"\n完成! 成功={success}, 失败={failed}")
+                    try:
+                        for i in range(count):
+                            if _check_esc():
+                                print("\n[ESC 中断] 私聊刷屏已停止")
+                                break
+                            ok = await sender.send_dm_message(to_user, content)
+                            if ok:
+                                success += 1
+                            else:
+                                failed += 1
+                            print(f"  [{i+1}/{count}] {'OK' if ok else 'FAIL'}")
+                            if i < count - 1:
+                                if not await _sleep_with_esc(spam_interval):
+                                    print("\n[ESC 中断] 私聊刷屏已停止")
+                                    break
+                        print(f"\n完成! 成功={success}, 失败={failed}")
+                    finally:
+                        await _stop_esc_reader()
                 else:
                     print("格式: /dmspam 用户ID 内容 次数")
                 continue
@@ -2364,6 +2960,8 @@ async def interactive_mode():
 async def main():
     try:
         await interactive_mode()
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        pass
     except Exception as e:
         print(f"程序错误: {e}")
         import traceback
@@ -2371,4 +2969,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
