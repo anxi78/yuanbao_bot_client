@@ -1,0 +1,9 @@
+{
+    "APP_KEY": "你的 APP_KEY",
+    "APP_SECRET": "你的 APP_SECRET",
+    "API_DOMAIN": "bot.yuanbao.tencent.com",
+    "WS_URL": "wss://bot-wss.yuanbao.tencent.com/wss/connection",
+    "DEFAULT_GROUP_CODE": "群号",
+    "SPAM_INTERVAL": 1.0,
+    "AUTO_DEFAULT_TEXT": "啊对对对，你说的都对"
+}
