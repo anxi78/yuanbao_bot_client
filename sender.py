@@ -44,6 +44,43 @@ COMMANDS = sorted([
     "/help", "/exit",
 ], key=len, reverse=True)
 
+# 命令中文描述（用于 SyncInformation 命令同步）
+COMMAND_DESCRIPTIONS: dict[str, str] = {
+    "/at": "艾特指定用户发送消息",
+    "/atall": "艾特全体成员（慎用）",
+    "/athuman": "艾特所有人类成员",
+    "/atbot": "艾特所有 Bot 成员",
+    "/spam": "普通刷屏",
+    "/sticker_spam": "贴纸刷屏",
+    "/atspam": "艾特+刷屏",
+    "/spamat": "艾特+刷屏",
+    "/multiat": "批量艾特多人",
+    "/image": "发送图片",
+    "/file": "发送文件",
+    "/reply": "引用消息回复",
+    "/replyspam": "引用刷屏",
+    "/group": "切换目标群",
+    "/users": "查看已保存用户列表",
+    "/adduser": "添加常用用户",
+    "/deluser": "删除用户",
+    "/sticker": "发送贴纸",
+    "/stickerlist": "查看可用贴纸",
+    "/stickerfind": "搜索贴纸",
+    "/dm": "发送私聊消息",
+    "/dmspam": "私聊刷屏",
+    "/members": "获取群成员列表",
+    "/myid": "在群成员中搜索自己的ID",
+    "/recent": "查看最近消息",
+    "/paste": "多行粘贴模式",
+    "/big": "发送放大 LaTeX 文本",
+    "/auto": "自动回复开关",
+    "/reconnect": "手动重连 WebSocket",
+    "/interval": "设置刷屏间隔",
+    "/groupinfo": "查询当前群信息",
+    "/help": "显示帮助",
+    "/exit": "退出程序",
+}
+
 
 class CommandAutoSuggest(AutoSuggest):
     """输入 / 开头时灰色显示完整命令名（类似 oh-my-zsh 的补全提示）"""
@@ -505,6 +542,9 @@ BIZ_CMD_SEND_C2C = "send_c2c_message"
 BIZ_CMD_SEND_GROUP = "send_group_message"
 BIZ_CMD_GET_MEMBERS = "get_group_member_list"
 BIZ_CMD_QUERY_GROUP_INFO = "query_group_info"
+BIZ_CMD_SYNC_INFORMATION = "sync_information"
+
+__version__ = "1.1.0"
 
 
 class SimpleProtobufCodec:
@@ -1110,6 +1150,13 @@ class SpamSender:
             response = await self.ws.recv()
             self.connected = True
             print("WebSocket 连接成功!")
+            # 发送命令同步信息（fire-and-forget）
+            try:
+                sync_msg = self._build_sync_information_req()
+                await self.ws.send(sync_msg)
+                print("命令同步信息已发送")
+            except Exception as e:
+                print(f"命令同步发送失败: {e}")
             asyncio.create_task(self._heartbeat())
             return True
         except Exception as e:
@@ -1127,6 +1174,155 @@ class SpamSender:
         )
         self.seq_no += 1
         return frame
+
+    def _build_sync_information_req(self) -> bytes:
+        """构建命令同步请求 (SyncInformationReq) 含完整命令列表"""
+        data = b""
+        # field 1: syncType = 1 (SYNC_INFORMATION_TYPE_COMMANDS, varint)
+        data += bytes([(1 << 3) | 0]) + self.codec.encode_varint(1)
+        # field 2: botVersion
+        data += self.codec.encode_string(2, __version__)
+        # field 3: pluginVersion
+        data += self.codec.encode_string(3, "1.0.0")
+
+        # ── field 11: commandData (SyncCommandsData, nested message) ──
+        # 只同步 /help，服务端内置菜单只有这个能匹配点亮
+        sync_cmds_data = b""
+        cmd_bytes = self.codec.encode_string(1, "/help")
+        cmd_bytes += self.codec.encode_string(2, "显示帮助信息")
+        sync_cmds_data += self.codec.encode_message_field(1, cmd_bytes)
+        # field 2 (repeated): pluginCommands — 留空
+        data += self.codec.encode_message_field(11, sync_cmds_data)
+
+        head = self.codec.encode_head(
+            cmd_type=CMD_TYPE_REQUEST, cmd=BIZ_CMD_SYNC_INFORMATION, seq_no=self.seq_no,
+            msg_id=self._generate_msg_id(), module=BIZ_MODULE
+        )
+        self.seq_no += 1
+        return self.codec.encode_conn_msg(head, data)
+
+    def _build_query_group_info_req(self, group_code: str = None) -> bytes:
+        """构建群信息查询请求 (QueryGroupInfoReq)"""
+        target = group_code or self.group_code
+        data = self.codec.encode_string(1, target)
+        head = self.codec.encode_head(
+            cmd_type=CMD_TYPE_REQUEST, cmd=BIZ_CMD_QUERY_GROUP_INFO, seq_no=self.seq_no,
+            msg_id=self._generate_msg_id(), module=BIZ_MODULE
+        )
+        self.seq_no += 1
+        return self.codec.encode_conn_msg(head, data)
+
+    async def send_query_group_info_request(self, group_code: str = None) -> dict:
+        """发送群信息查询请求并等待响应"""
+        msg_id = self._generate_msg_id()
+        target = group_code or self.group_code
+        data = self.codec.encode_string(1, target)
+        head = self.codec.encode_head(
+            cmd_type=CMD_TYPE_REQUEST, cmd=BIZ_CMD_QUERY_GROUP_INFO, seq_no=self.seq_no,
+            msg_id=msg_id, module=BIZ_MODULE
+        )
+        self.seq_no += 1
+        frame = self.codec.encode_conn_msg(head, data)
+
+        future = asyncio.get_event_loop().create_future()
+        self.pending_requests[msg_id] = future
+        try:
+            await self.ws.send(frame)
+            result = await asyncio.wait_for(future, timeout=10.0)
+            return result
+        except asyncio.TimeoutError:
+            self.pending_requests.pop(msg_id, None)
+            return {"code": -1, "message": "请求超时"}
+        except Exception as e:
+            self.pending_requests.pop(msg_id, None)
+            return {"code": -1, "message": str(e)}
+
+    def _decode_query_group_info_rsp(self, data: bytes) -> dict:
+        """解码 QueryGroupInfoRsp protobuf 数据"""
+        try:
+            result = {}
+            pos = 0
+            while pos < len(data):
+                tag = data[pos]
+                pos += 1
+                field_num = tag >> 3
+                wire_type = tag & 7
+                if wire_type == 0:
+                    # varint
+                    value = 0
+                    shift = 0
+                    while True:
+                        byte = data[pos]
+                        pos += 1
+                        value |= (byte & 0x7f) << shift
+                        shift += 7
+                        if not (byte & 0x80):
+                            break
+                    if field_num == 1:
+                        result["code"] = value
+                    elif field_num == 4:
+                        result["group_size"] = value
+                elif wire_type == 2:
+                    # length-delimited
+                    length = 0
+                    shift = 0
+                    while True:
+                        byte = data[pos]
+                        pos += 1
+                        length |= (byte & 0x7f) << shift
+                        shift += 7
+                        if not (byte & 0x80):
+                            break
+                    field_data = data[pos:pos + length]
+                    pos += length
+                    if field_num == 2:
+                        result["message"] = field_data.decode("utf-8", errors="replace")
+                    elif field_num == 3:
+                        # GroupInfo nested message
+                        group_info = {}
+                        gi_pos = 0
+                        while gi_pos < len(field_data):
+                            gi_tag = field_data[gi_pos]
+                            gi_pos += 1
+                            gi_field = gi_tag >> 3
+                            gi_wire = gi_tag & 7
+                            if gi_wire == 0:
+                                gi_val = 0
+                                gi_shift = 0
+                                while True:
+                                    gi_byte = field_data[gi_pos]
+                                    gi_pos += 1
+                                    gi_val |= (gi_byte & 0x7f) << gi_shift
+                                    gi_shift += 7
+                                    if not (gi_byte & 0x80):
+                                        break
+                                if gi_field == 4:
+                                    group_info["group_size"] = gi_val
+                            elif gi_wire == 2:
+                                gi_len = 0
+                                gi_shift = 0
+                                while True:
+                                    gi_byte = field_data[gi_pos]
+                                    gi_pos += 1
+                                    gi_len |= (gi_byte & 0x7f) << gi_shift
+                                    gi_shift += 7
+                                    if not (gi_byte & 0x80):
+                                        break
+                                gi_data = field_data[gi_pos:gi_pos + gi_len]
+                                gi_pos += gi_len
+                                gi_str = gi_data.decode("utf-8", errors="replace")
+                                if gi_field == 1:
+                                    group_info["group_name"] = gi_str
+                                elif gi_field == 2:
+                                    group_info["group_owner_user_id"] = gi_str
+                                elif gi_field == 3:
+                                    group_info["group_owner_nickname"] = gi_str
+                        result["group_info"] = group_info
+                else:
+                    break
+            return result
+        except Exception as e:
+            return {}
 
     def _build_sticker_msg(self, sticker_name: str) -> bytes:
         """构建贴纸群消息"""
@@ -1222,9 +1418,10 @@ class SpamSender:
         self.seq_no += 1
         return self.codec.encode_conn_msg(head, data)
 
-    def _build_group_msg(self, text: str) -> bytes:
+    def _build_group_msg(self, text: str, group_code: str = None) -> bytes:
+        target = group_code or self.group_code
         biz_data = self.codec.encode_send_group_msg_req(
-            msg_id=self._generate_msg_id(), group_code=self.group_code,
+            msg_id=self._generate_msg_id(), group_code=target,
             from_account=self.bot_id or "", text=text
         )
         head = self.codec.encode_head(
@@ -1271,8 +1468,9 @@ class SpamSender:
         self.seq_no += 1
         return self.codec.encode_conn_msg(head, data)
 
-    def _build_reply_msg(self, text: str, ref_msg_id: str, at_user_id: str = "", at_nickname: str = "") -> bytes:
+    def _build_reply_msg(self, text: str, ref_msg_id: str, at_user_id: str = "", at_nickname: str = "", target_group: str = None) -> bytes:
         """构建带引用的群消息，可选同时艾特"""
+        gc = target_group or self.group_code
         # 如果有艾特，先构建艾特元素
         if at_user_id:
             display_name = at_nickname or at_user_id
@@ -1293,7 +1491,7 @@ class SpamSender:
 
             data = b''
             data += self.codec.encode_string(1, self._generate_msg_id())
-            data += self.codec.encode_string(2, self.group_code)
+            data += self.codec.encode_string(2, gc)
             data += self.codec.encode_string(3, self.bot_id or "")
             data += self.codec.encode_string(5, str(random.randint(1, 999999999)))
             data += self.codec.encode_message_field(6, at_elem)
@@ -1302,7 +1500,7 @@ class SpamSender:
         else:
             # 纯引用消息（无艾特）
             biz_data = self.codec.encode_send_group_msg_req(
-                msg_id=self._generate_msg_id(), group_code=self.group_code,
+                msg_id=self._generate_msg_id(), group_code=gc,
                 from_account=self.bot_id or "", text=text, ref_msg_id=ref_msg_id
             )
             data = biz_data
@@ -1672,14 +1870,14 @@ class SpamSender:
         except Exception:
             return False
 
-    async def send_group_message(self, text: str, at_user: str = None, at_nickname: str = None) -> bool:
+    async def send_group_message(self, text: str, at_user: str = None, at_nickname: str = None, target_group: str = None) -> bool:
         if not self.connected or not self.ws:
             return False
         try:
             if at_user:
                 msg = self._build_at_message(text, at_user, at_nickname)
             else:
-                msg = self._build_group_msg(text)
+                msg = self._build_group_msg(text, group_code=target_group)
             await self.ws.send(msg)
             return True
         except Exception as e:
@@ -1829,6 +2027,19 @@ class SpamSender:
                                 group_code = push_json.get("group_code", "")
                                 now_str = datetime.now().strftime("%H:%M:%S")
                                 
+                                # ── 检测是否艾特了本 bot ──
+                                is_at_bot = False
+                                if msg_body:
+                                    for elem in msg_body:
+                                        if elem.get("msg_type") == "TIMCustomElem":
+                                            try:
+                                                cd = json.loads(elem.get("msg_content", {}).get("data", "{}"))
+                                                if cd.get("elem_type") == 1002 and cd.get("user_id") == self.bot_id:
+                                                    is_at_bot = True
+                                                    break
+                                            except:
+                                                pass
+                                
                                 cache_entry = {
                                     "time": now_str,
                                     "sender_id": sender_id,
@@ -1854,6 +2065,54 @@ class SpamSender:
                                 # 过滤 bot 自己的消息（sender_id == self.bot_id）
                                 if sender_id != self.bot_id and text_content:
                                     print(f"\n[{now_str}] {sender_name}: {text_content}")
+
+                                # ── 检测 /help 命令 ──
+                                if sender_id != self.bot_id:
+                                    text_stripped = text_content.strip()
+                                    is_help_cmd = text_stripped == "/help" or "/help" in text_stripped
+                                    is_private_help = not group_code and text_stripped == "/help"
+                                    is_group_help = group_code and is_help_cmd and is_at_bot
+                                    if is_private_help or is_group_help:
+                                        if not group_code:
+                                            # 私聊：显示版本 + 发送者信息
+                                            help_text = (
+                                                f"━━━ 元宝 Bot  ━━━━━\n\n"
+                                                f"版本: {__version__}\n\n"
+                                                f"当前私聊信息:\n"
+                                                f"ID: {sender_id}\n"
+                                                f"昵称: {sender_name}\n"
+                                                f"━━━━━━━━━━━━━━━━"
+                                            )
+                                            await self.send_dm_message(sender_id, help_text)
+                                        else:
+                                            # 群聊：用独立任务查询群信息，避免阻塞接收循环
+                                            async def _help_query(target_gc):
+                                                gi_data = await self.send_query_group_info_request()
+                                                gi = gi_data.get("group_info") if gi_data else None
+                                                if gi:
+                                                    gname = gi.get("group_name", "未知")
+                                                    gowner_id = gi.get("group_owner_user_id", "未知")
+                                                    gowner_name = gi.get("group_owner_nickname", "未知")
+                                                    gsize = gi_data.get("group_size", gi.get("group_size", "未知"))
+                                                    text = (
+                                                        f"━━━ 元宝 Bot  ━━━━━\n\n"
+                                                        f"版本: {__version__}\n\n"
+                                                        f"当前群聊信息:\n"
+                                                        f"群名称: {gname}\n"
+                                                        f"群主ID: {gowner_id}\n"
+                                                        f"群主昵称: {gowner_name}\n"
+                                                        f"群人数: {gsize}\n"
+                                                        f"━━━━━━━━━━━━━━━━"
+                                                    )
+                                                else:
+                                                    text = (
+                                                        f"━━━ 元宝 Bot  ━━━━━\n\n"
+                                                        f"版本: {__version__}\n\n"
+                                                        f"查询群信息失败\n"
+                                                        f"━━━━━━━━━━━━━━━━"
+                                                    )
+                                                await self.send_group_message(text, target_group=target_gc)
+                                            asyncio.create_task(_help_query(group_code))
                             except (json.JSONDecodeError, Exception):
                                 pass
                         continue
@@ -1872,6 +2131,13 @@ class SpamSender:
                             else:
                                 logger.debug("解码失败")
                                 future.set_result({"msg_id": msg_id, "code": -1, "message": "解码失败", "member_list": []})
+                        elif cmd == BIZ_CMD_QUERY_GROUP_INFO and biz_data:
+                            result = self._decode_query_group_info_rsp(biz_data)
+                            if result:
+                                result["msg_id"] = msg_id
+                                future.set_result(result)
+                            else:
+                                future.set_result({"msg_id": msg_id, "code": -1, "message": "解码失败"})
                         elif status != 0:
                             logger.debug("响应状态异常: %d", status)
                             future.set_result({"msg_id": msg_id, "code": status, "message": "FAIL", "member_list": []})
@@ -1924,6 +2190,13 @@ class SpamSender:
                 pass
             self.ws = None
 
+        # 清理旧连接的 pending_requests（重连后不会再收到响应）
+        pending = list(self.pending_requests.items())
+        self.pending_requests.clear()
+        for old_msg_id, old_future in pending:
+            if not old_future.done():
+                old_future.set_result({"code": -1, "message": "连接已断开，触发重连", "msg_id": old_msg_id})
+
         print("\n[重连] 连接已断开，正在尝试自动重连...")
         delays = [1, 2, 4, 8, 16]
         for delay in delays:
@@ -1945,6 +2218,13 @@ class SpamSender:
                 self.connected = True
                 print(f"[重连] WebSocket 重连成功!")
 
+                # 发送命令同步信息
+                try:
+                    sync_msg = self._build_sync_information_req()
+                    await self.ws.send(sync_msg)
+                except Exception:
+                    pass
+
                 # 重启心跳和接收循环
                 asyncio.create_task(self._heartbeat())
                 asyncio.create_task(self._receive_loop())
@@ -1962,7 +2242,7 @@ class SpamSender:
 
 def print_banner():
     print("\033[96m=" * 56)
-    print("  元宝 Bot 发送器")
+    print(f"  元宝 Bot 发送器  v{__version__}")
     print("=" * 56)
     print()
 
@@ -2000,8 +2280,9 @@ def print_help():
     print("  /myid 昵称        - 在成员列表中搜索自己的ID（填你的群昵称）")
     print("  /recent [N]       - 查看最近 N 条消息（默认10条）")
     print("  /paste            - 多行粘贴模式，输入 /end 发送")
-    print("  /big 字号 内容    - 发送放大 LaTeX 文本")
+    print("  /big 内容 字号    - 发送放大 LaTeX 文本")
     print("  /reconnect        - 手动重新连接 WebSocket（断线后使用）")
+    print("  /groupinfo        - 查询当前群信息（群名、群主、人数等）")
     print("  /auto             - 查看自动回复状态")
     print("  /auto on          - 开启自动回复（默认文本）")
     print("  /auto on <文本>   - 开启自动回复（自定义回复文本）")
@@ -2055,13 +2336,21 @@ async def interactive_mode():
         # 不回复自己的消息
         if cache_entry["sender_id"] == sender.bot_id:
             return
-        ref_msg_id = cache_entry["msg_id"]
-        at_user = cache_entry["sender_id"]
-        at_nick = cache_entry["sender_name"]
         reply_text = sender.auto_reply_text
-        msg = sender._build_reply_msg(reply_text, ref_msg_id, at_user, at_nick)
+        group_code = cache_entry.get("group_code", "")
+        sender_id = cache_entry["sender_id"]
         try:
-            await sender.ws.send(msg)
+            if group_code:
+                # 群聊：在对应群回复+引用+艾特
+                msg = sender._build_reply_msg(
+                    reply_text, cache_entry["msg_id"],
+                    at_user_id=sender_id, at_nickname=cache_entry["sender_name"],
+                    target_group=group_code
+                )
+                await sender.ws.send(msg)
+            else:
+                # 私聊：直接发 DM
+                await sender.send_dm_message(sender_id, reply_text)
         except Exception:
             pass
 
@@ -2089,6 +2378,25 @@ async def interactive_mode():
             # 帮助
             if raw == "/help":
                 print_help()
+                continue
+
+            # ===== /groupinfo 查询群信息 =====
+            if raw == "/groupinfo":
+                print("正在查询群信息...")
+                group_info = await sender.send_query_group_info_request()
+                if group_info:
+                    gi = group_info.get("group_info")
+                    if gi:
+                        print(f"  群名称: {gi.get('group_name', '未知')}")
+                        print(f"  群主ID: {gi.get('group_owner_user_id', '未知')}")
+                        print(f"  群主昵称: {gi.get('group_owner_nickname', '未知')}")
+                        print(f"  群人数: {group_info.get('group_size', gi.get('group_size', '未知'))}")
+                    else:
+                        code = group_info.get("code", -1)
+                        msg = group_info.get("message", "未知错误")
+                        print(f"查询失败: code={code}, msg={msg}")
+                else:
+                    print("查询超时或失败")
                 continue
 
             # ===== /reconnect 手动重连 =====
@@ -2153,16 +2461,16 @@ async def interactive_mode():
 
             # 放大 LaTeX 文本
             if raw.startswith("/big "):
-                parts = raw[5:].split(" ", 1)
+                parts = raw[5:].rsplit(" ", 1)
                 if len(parts) == 2 and parts[0] and parts[1]:
-                    size, content = parts
+                    content, size = parts
                     message = f"$\\scalebox{{{size}}}{{\\textcolor{{black}}{{{content}}}}}$"
                     if await sender.send_group_message(message):
                         print(f"已发送: {message[:50]}")
                     else:
                         print("发送失败")
                 else:
-                    print("格式: /big 字号 内容")
+                    print("格式: /big 内容 字号")
                 continue
 
             # 切换目标群

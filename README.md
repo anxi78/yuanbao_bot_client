@@ -43,7 +43,7 @@ python sender.py
 | `/members` | 获取群成员列表 |
 | `/recent [N]` | 查看最近 N 条消息 |
 | `/paste` | 多行粘贴模式 |
-| `/big 字号 内容` | 发送放大 LaTeX 文本 |
+| `/big 内容 字号` | 发送放大 LaTeX 文本 |
 | `/auto on [文本]` | 开启自动回复 |
 | `/reconnect` | 手动重连 WebSocket |
 | `/help` | 显示帮助 |
