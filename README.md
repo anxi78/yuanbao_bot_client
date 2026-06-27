@@ -7,12 +7,14 @@
 | 文件 | 说明 |
 |------|------|
 | `sender.py` | 核心交互式发送器，含 `SpamSender` 类、Protobuf 编解码、消息发送/刷屏/自动回复 |
-| `config.json` | 配置文件，设置 Bot 凭证（APP_KEY / APP_SECRET）等参数 |
+| `config.example.json` | 配置文件，设置 Bot 凭证（APP_KEY / APP_SECRET）等参数 |
 | `requirements.txt` | Python 依赖清单 |
 
 ## 安装
 
 ```bash
+git clone https://github.com/anxi78/yuanbao_bot_client.git
+cd yuanbao_bot_client
 pip install -r requirements.txt
 ```
 
