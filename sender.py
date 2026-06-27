@@ -37,7 +37,7 @@ COMMANDS = sorted([
     "/at", "/spam", "/sticker_spam", "/atspam", "/spamat",
     "/multiat", "/atall", "/athuman", "/atbot",
     "/image", "/file", "/reply", "/replyspam",
-    "/group", "/users", "/adduser", "/deluser",
+    "/group", "/groupinfo", "/users", "/adduser", "/deluser",
     "/sticker", "/stickerlist", "/stickerfind",
     "/dm", "/dmspam", "/members", "/myid", "/recent",
     "/paste", "/big", "/auto", "/reconnect", "/interval",
@@ -2256,6 +2256,8 @@ def print_help():
     print("  /atspam 用户ID 内容 次数  - 艾特+刷屏（核心功能）")
     print("  /multiat 用户ID1,ID2,... 内容 - 批量艾特多人")
     print("  /atall 内容      - 艾特全体成员（慎用！）")
+    print("  /athuman 内容    - 艾特所有人类成员")
+    print("  /atbot 内容      - 艾特所有 Bot 成员")
     print("  /image 图片路径  - 发送图片（需绝对路径）")
     print("  /file 文件路径  - 发送文件（需绝对路径）")
     print("  /spamat 用户ID 内容 次数  - 同上，艾特+刷屏")
