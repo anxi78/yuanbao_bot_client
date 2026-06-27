@@ -4,3 +4,4 @@ __pycache__/
 yb/
 bot.log
 yuanbao-openclaw-plugin/
+config.json
