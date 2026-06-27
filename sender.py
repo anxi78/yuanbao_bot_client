@@ -510,7 +510,7 @@ def decode_get_group_member_list_rsp(data: bytes) -> dict:
 # 从 config.json 加载配置
 def load_config():
     """加载 config.json 配置文件"""
-    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+    config_path = os.path.join(os.environ['HOME'], 'yuanbao_bot_client', 'config.json')
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
             app_config = json.load(f)
