@@ -529,7 +529,6 @@ WS_URL = app_config.get('WS_URL', '')
 # 其他可能用到的配置
 DEFAULT_GROUP_CODE = app_config.get('DEFAULT_GROUP_CODE', '')
 SPAM_INTERVAL = app_config.get('SPAM_INTERVAL', 1.0)
-AUTO_DEFAULT_TEXT = app_config.get('AUTO_DEFAULT_TEXT', '啊，对对对，你说的都对')
 IMAGE_GROUP_CODE = app_config.get('IMAGE_GROUP_CODE', '')
 YUANBAO_BOT_ID = 'szUvRH8s4ekettawNjDREmAG4W7h+Lhb8Sy9tq/otZU='
 YUANBAO_NICKNAME = '元宝'
@@ -2529,10 +2528,9 @@ def print_help():
     print("  /ai-image <提示词>  - AI 生成图片（需配置 IMAGE_GROUP_CODE）")
     print("  /reconnect        - 手动重新连接 WebSocket（断线后使用）")
     print("  /groupinfo        - 查询当前群信息（群名、群主、人数等）")
-    print("  /auto             - 查看自动回复状态")
-    print("  /auto on          - 开启自动回复（默认文本）")
-    print("  /auto on <文本>   - 开启自动回复（自定义回复文本）")
-    print("  /auto off         - 关闭自动回复")
+    print("  /auto               - 查看自动回复状态")
+    print("  /auto <text> on     - 开启自动回复 / 代理模式（yb=代理）")
+    print("  /auto off           - 关闭自动回复")
     print("  /help             - 显示帮助")
     print("  /exit             - 退出")
     print()
@@ -2683,26 +2681,27 @@ async def interactive_mode():
                     asyncio.create_task(sender._auto_reconnect())
                 continue
 
-            # ===== /auto 自动回复开关 =====
+            # ===== /auto 自动回复开关（格式: /auto <text> on  /  /auto off）=====
             if raw.startswith("/auto "):
                 arg = raw[6:].strip()
                 if arg == "off":
                     sender.auto_reply_text = None
                     print("自动回复已关闭")
-                elif arg.startswith("on"):
-                    rest = arg[2:].strip()
-                    if rest:
-                        sender.auto_reply_text = rest
-                        print(f"自动回复已开启：自定义回复文本 -> \"{rest}\"")
+                elif len(arg) > 3 and arg.endswith(" on"):
+                    text = arg[:-3].strip()
+                    if text:
+                        sender.auto_reply_text = text
+                        mode = "代理模式" if text == "yb" else "自动回复"
+                        print(f"{mode}已开启：回复文本 -> \"{text}\"")
                     else:
-                        sender.auto_reply_text = AUTO_DEFAULT_TEXT
-                        print(f"自动回复已开启：默认回复文本 -> \"{AUTO_DEFAULT_TEXT}\"")
+                        print("格式: /auto <text> on  或  /auto off")
                 else:
-                    print("格式: /auto on [回复文本]  或  /auto off")
+                    print("格式: /auto <text> on  或  /auto off")
                 continue
             if raw == "/auto":
                 if sender.auto_reply_text:
-                    print(f"自动回复已开启，当前文本: \"{sender.auto_reply_text}\"")
+                    mode = "代理模式" if sender.auto_reply_text == "yb" else "自动回复"
+                    print(f"{mode}已开启，当前文本: \"{sender.auto_reply_text}\"")
                 else:
                     print("自动回复已关闭")
                 continue
