@@ -13,6 +13,7 @@ import sys
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
+from collections import deque
 import requests
 from prompt_toolkit import PromptSession
 from prompt_toolkit.auto_suggest import AutoSuggest, Suggestion, AutoSuggestFromHistory
@@ -1039,6 +1040,9 @@ class SpamSender:
         self.auto_reply_text: Optional[str] = None
         # /ai-image: 等待元宝图片回复的 Future
         self._pending_image_future: Optional[asyncio.Future] = None
+        # /auto on yb 代理模式队列: deque of {"future", "target_group", "ref_msg_id", "ref_sender_name", "original_content"}
+        self._proxy_queue: deque = deque()
+        self._proxy_worker_task: Optional[asyncio.Task] = None
         # 自动重连状态
         self._reconnecting: bool = False
 
@@ -2052,6 +2056,33 @@ class SpamSender:
         except Exception:
             return False
 
+    async def _proxy_worker_loop(self):
+        """后台任务：顺序处理代理队列中的请求"""
+        while self._proxy_queue:
+            item = self._proxy_queue[0]
+            proxy_msg = f"来自{item['ref_sender_name']}的消息: {item['original_content']}"
+            print(f"\n[Auto-Proxy] 转发消息到元宝: {proxy_msg[:60]}...")
+            ok = await self.send_group_message(
+                proxy_msg,
+                at_user=YUANBAO_BOT_ID, at_nickname=YUANBAO_NICKNAME,
+                target_group=IMAGE_GROUP_CODE
+            )
+            if ok:
+                print(f"[Auto-Proxy] 已发送，等待元宝回复...")
+                try:
+                    result = await asyncio.wait_for(item["future"], timeout=120)
+                    if result:
+                        print(f"[Auto-Proxy] 元宝回复已转发到原群")
+                except asyncio.TimeoutError:
+                    print(f"[Auto-Proxy] 超时: 元宝未在 120 秒内回复")
+                    if not item["future"].done():
+                        item["future"].cancel()
+            else:
+                print("[Auto-Proxy] 发送请求失败")
+                if not item["future"].done():
+                    item["future"].cancel()
+            self._proxy_queue.popleft()
+
     async def spam_with_at(self, text: str, count: int, at_user: str = None, at_nickname: str = None,
                            interval: float = 1.0, progress_callback=None):
         """刷屏+艾特核心功能（支持 ESC 中断）"""
@@ -2305,6 +2336,26 @@ class SpamSender:
                                                     except Exception:
                                                         pass
                                                 asyncio.create_task(_wait_for_image_after_text(_img_future, self))
+
+                                # ── 检测元宝代理回复（/auto on yb 流程）──
+                                if (self._proxy_queue
+                                        and not self._proxy_queue[0]["future"].done()
+                                        and group_code == IMAGE_GROUP_CODE
+                                        and sender_id == YUANBAO_BOT_ID):
+                                    current = self._proxy_queue[0]
+                                    reply_content = text_content.strip()
+                                    if reply_content:
+                                        print(f"\n[Auto-Proxy] 收到元宝回复: {reply_content[:60]}...")
+                                        msg = self._build_reply_msg(
+                                            reply_content,
+                                            current["ref_msg_id"],
+                                            target_group=current["target_group"]
+                                        )
+                                        if msg:
+                                            await self.ws.send(msg)
+                                            print(f"[Auto-Proxy] 已转发到原群")
+                                        if not current["future"].done():
+                                            current["future"].set_result(reply_content)
                             except (json.JSONDecodeError, Exception):
                                 pass
                         continue
@@ -2524,7 +2575,7 @@ async def interactive_mode():
     else:
         print("自动获取群成员列表失败，可使用 /members 手动获取")
 
-    # ── /ok 自动回复回调 ──
+    # ── 自动回复/代理模式回调 ──
     async def _auto_ok_callback(push_json: dict, cache_entry: dict):
         if not sender.auto_reply_text:
             return
@@ -2534,12 +2585,41 @@ async def interactive_mode():
         reply_text = sender.auto_reply_text
         group_code = cache_entry.get("group_code", "")
         sender_id = cache_entry["sender_id"]
+        sender_name = cache_entry.get("sender_name", "")
+        content = cache_entry.get("content", "")
+        msg_id = cache_entry.get("msg_id", "")
+
+        # ── 代理模式（/auto on yb）────
+        if reply_text == "yb":
+            if not group_code:
+                return  # 只处理群聊消息
+            if group_code == IMAGE_GROUP_CODE:
+                return  # 不代理图片群的消息，避免循环
+            if not IMAGE_GROUP_CODE:
+                print("[Auto-Proxy] 错误: 未配置 IMAGE_GROUP_CODE")
+                return
+
+            loop = asyncio.get_event_loop()
+            future = loop.create_future()
+            sender._proxy_queue.append({
+                "future": future,
+                "target_group": group_code,
+                "ref_msg_id": msg_id,
+                "ref_sender_name": sender_name,
+                "original_content": content,
+            })
+            print(f"[Auto-Proxy] 请求已加入队列（共 {len(sender._proxy_queue)} 个）")
+            if sender._proxy_worker_task is None or sender._proxy_worker_task.done():
+                sender._proxy_worker_task = asyncio.create_task(sender._proxy_worker_loop())
+            return
+
+        # ── 原有自动回复逻辑 ──
         try:
             if group_code:
                 # 群聊：在对应群回复+引用+艾特
                 msg = sender._build_reply_msg(
-                    reply_text, cache_entry["msg_id"],
-                    at_user_id=sender_id, at_nickname=cache_entry["sender_name"],
+                    reply_text, msg_id,
+                    at_user_id=sender_id, at_nickname=sender_name,
                     target_group=group_code
                 )
                 await sender.ws.send(msg)
