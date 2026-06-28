@@ -1619,33 +1619,39 @@ class SpamSender:
             print(f"上传到 COS 失败: {e}")
             return None
 
-    def _build_image_msg(self, url: str, uuid: str = "", size: int = 0, width: int = 0, height: int = 0) -> bytes:
-        """构建图片群消息（基于 image/send.py 的 TIMImageElem 构造）"""
-        # 构建 ImImageInfoArray
+    def _build_image_elem(self, url: str, uuid: str = "", size: int = 0,
+                          width: int = 0, height: int = 0) -> bytes:
+        """构建单个 TIMImageElem 的 MsgBodyElement 字节（可重复用于 msgBody）"""
         img_info = (
-            pb_uint32(1, 1)          # type=1
+            pb_uint32(1, 1)          # type=1（原始图片）
             + pb_uint32(2, size)     # size
             + pb_uint32(3, width)    # width
             + pb_uint32(4, height)   # height
             + pb_string(5, url)      # url
         )
-        # 构建 MsgContent（TIMImageElem 的 msg_content）
         mc = b''
         if uuid:
             mc += pb_string(2, uuid)  # uuid 字段编号为 2
         mc += pb_uint32(3, 255)       # image_format，默认 255
         mc += pb_msg(8, img_info)     # image_info_array 字段编号为 8
-        # 构建 MsgBodyElement
-        body_elem = pb_string(1, "TIMImageElem") + pb_msg(2, mc)
+        return pb_string(1, "TIMImageElem") + pb_msg(2, mc)
+
+    def _build_image_msg(self, images: list) -> bytes:
+        """构建多图群消息（msgBody 包含多个 TIMImageElem）
         
-        # 构建 SendGroupMessageReq
+        Args:
+            images: 列表，每项为 (url, uuid, size, width, height) 元组
+        """
+        # 构建 SendGroupMessageReq，msgBody 包含多个 TIMImageElem
         data = b''
         data += pb_string(1, self._generate_msg_id())                # msg_id
         data += pb_string(2, self.group_code)                        # group_code
         data += pb_string(3, self.bot_id or "")                      # from_account
         data += pb_string(4, "")                                     # to_account（空）
         data += pb_string(5, str(random.randint(1, 999999999)))      # random
-        data += pb_msg(6, body_elem)                                 # msgBody
+        for img in images:
+            elem = self._build_image_elem(*img)
+            data += pb_msg(6, elem)                                  # msgBody (repeated)
         data += pb_string(7, "")                                     # refMsgId（空）
         
         # 构建 ConnMsg
@@ -1678,53 +1684,78 @@ class SpamSender:
         )
         return self.codec.encode_conn_msg(head, data)
 
-    async def send_image(self, image_path: str) -> bool:
-        """发送图片消息"""
+    async def send_images_multi(self, image_paths: list[str]) -> bool:
+        """发送多张图片到当前群（一次消息包含多图）
+        
+        Args:
+            image_paths: 图片路径列表
+        """
         if not self.connected or not self.ws:
             return False
         
         import os
         import uuid
         
-        # 检查文件是否存在
-        if not os.path.exists(image_path):
-            print(f"图片文件不存在: {image_path}")
+        # 对每张图片：校验 → 上传 → 收集元信息
+        images = []  # [(url, uuid, size, width, height), ...]
+        from PIL import Image
+        import io
+        
+        for path in image_paths:
+            # 检查文件是否存在
+            if not os.path.exists(path):
+                print(f"图片文件不存在: {path}")
+                continue
+            
+            # 读取图片
+            try:
+                with open(path, 'rb') as f:
+                    data = f.read()
+            except Exception as e:
+                print(f"读取图片失败 {path}: {e}")
+                continue
+            
+            # 检查大小（默认最大 20MB）
+            max_bytes = 20 * 1024 * 1024
+            if len(data) > max_bytes:
+                print(f"图片过大（跳过）: {path} ({len(data) / 1024 / 1024:.1f} MB > 20 MB)")
+                continue
+            
+            # 获取上传凭证
+            filename = os.path.basename(path)
+            file_id = uuid.uuid4().hex
+            config = self._get_upload_info(filename, file_id)
+            if not config:
+                continue
+            
+            # 上传图片
+            url = self._upload_to_cos(config, data, filename)
+            if not url:
+                continue
+            
+            # 解析图片宽高
+            width, height = 0, 0
+            try:
+                img = Image.open(io.BytesIO(data))
+                width, height = img.size
+            except Exception:
+                pass
+            
+            images.append((url, file_id, len(data), width, height))
+        
+        if not images:
+            print("没有成功处理任何图片")
             return False
         
-        # 读取图片
+        # 一次性发送所有图片（多个 TIMImageElem 合并到一个 msgBody）
         try:
-            with open(image_path, 'rb') as f:
-                data = f.read()
-        except Exception as e:
-            print(f"读取图片失败: {e}")
-            return False
-        
-        # 检查大小（默认最大 20MB）
-        max_bytes = 20 * 1024 * 1024
-        if len(data) > max_bytes:
-            print(f"图片过大: {len(data) / 1024 / 1024:.1f} MB > 20 MB")
-            return False
-        
-        # 获取上传凭证
-        filename = os.path.basename(image_path)
-        file_id = uuid.uuid4().hex
-        config = self._get_upload_info(filename, file_id)
-        if not config:
-            return False
-        
-        # 上传图片
-        url = self._upload_to_cos(config, data, filename)
-        if not url:
-            return False
-        
-        # 发送图片消息
-        try:
-            msg = self._build_image_msg(url, file_id, size=len(data))
+            msg = self._build_image_msg(images)
             await self.ws.send(msg)
-            print(f"图片已发送: {url}")
+            count = len(images)
+            print(f"已发送 {count} 张图片: {', '.join(os.path.basename(p) for p in image_paths[:count])}")
             return True
         except Exception as e:
-            print(f"发送失败: {e}")
+            print(f"发送多图失败: {e}")
             return False
 
     async def send_file(self, file_path: str) -> bool:
@@ -2761,18 +2792,18 @@ async def interactive_mode():
                     print("格式: /sticker_spam 贴纸名 次数")
                 continue
 
-            # ===== 发送图片 =====
-            # 格式: /image 图片绝对路径
+            # ===== 发送图片（支持多张，空格分隔） =====
+            # 格式: /image 图片路径1 [图片路径2 ...]
             if raw.startswith("/image "):
-                image_path = raw[7:].strip()
-                if image_path:
-                    print(f"正在发送图片: {image_path}")
-                    if await sender.send_image(image_path):
-                        print("图片发送成功!")
+                parts = raw[7:].strip().split()
+                if parts:
+                    print(f"正在发送 {len(parts)} 张图片...")
+                    if await sender.send_images_multi(parts):
+                        print(f"{len(parts)} 张图片发送成功!")
                     else:
                         print("图片发送失败")
                 else:
-                    print("格式: /image 图片绝对路径")
+                    print("格式: /image 图片路径1 [图片路径2 ...]")
                 continue
 
             # ===== 发送文件 =====
