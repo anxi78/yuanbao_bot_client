@@ -36,7 +36,7 @@ logger.propagate = False
 COMMANDS = sorted([
     "/at", "/spam", "/sticker_spam", "/atspam", "/spamat",
     "/multiat", "/atall", "/athuman", "/atbot",
-    "/image", "/file", "/reply", "/replyspam",
+    "/image", "/ai-image", "/file", "/reply", "/replyspam",
     "/group", "/groupinfo", "/users", "/adduser", "/deluser",
     "/sticker", "/stickerlist", "/stickerfind",
     "/dm", "/dmspam", "/members", "/myid", "/recent",
@@ -56,6 +56,7 @@ COMMAND_DESCRIPTIONS: dict[str, str] = {
     "/spamat": "艾特+刷屏",
     "/multiat": "批量艾特多人",
     "/image": "发送图片",
+    "/ai-image": "AI 生成图片",
     "/file": "发送文件",
     "/reply": "引用消息回复",
     "/replyspam": "引用刷屏",
@@ -528,6 +529,9 @@ WS_URL = app_config.get('WS_URL', '')
 DEFAULT_GROUP_CODE = app_config.get('DEFAULT_GROUP_CODE', '')
 SPAM_INTERVAL = app_config.get('SPAM_INTERVAL', 1.0)
 AUTO_DEFAULT_TEXT = app_config.get('AUTO_DEFAULT_TEXT', '啊，对对对，你说的都对')
+IMAGE_GROUP_CODE = app_config.get('IMAGE_GROUP_CODE', '')
+YUANBAO_BOT_ID = 'szUvRH8s4ekettawNjDREmAG4W7h+Lhb8Sy9tq/otZU='
+YUANBAO_NICKNAME = '元宝'
 
 # 协议常量
 CMD_TYPE_REQUEST = 0
@@ -1017,6 +1021,7 @@ class SpamSender:
     def __init__(self):
         self.token: Optional[str] = None
         self.bot_id: Optional[str] = None
+        self.instance_id: Optional[str] = None
         self.ws = None
         self.connected = False
         self.seq_no = 0
@@ -1032,6 +1037,8 @@ class SpamSender:
         self.on_push_message: Optional[callable] = None
         # /auto 自动回复开关（None=关闭，字符串=回复文本）
         self.auto_reply_text: Optional[str] = None
+        # /ai-image: 等待元宝图片回复的 Future
+        self._pending_image_future: Optional[asyncio.Future] = None
         # 自动重连状态
         self._reconnecting: bool = False
 
@@ -1115,11 +1122,12 @@ class SpamSender:
         plain = f"{nonce}{timestamp}{APP_KEY}{APP_SECRET}"
         signature = hmac.new(APP_SECRET.encode(), plain.encode(), hashlib.sha256).hexdigest()
 
+        self.instance_id = str(random.randint(1, 1000))
         headers = {
             "Content-Type": "application/json",
             "X-AppVersion": "1.0.11",
             "X-OperationSystem": "linux",
-            "X-Instance-Id": str(random.randint(1, 1000)),
+            "X-Instance-Id": self.instance_id,
             "X-Bot-Version": "2026.3.22"
         }
         body = {"app_key": APP_KEY, "nonce": nonce, "signature": signature, "timestamp": timestamp}
@@ -1139,6 +1147,93 @@ class SpamSender:
         except Exception as e:
             print(f"签票错误: {e}")
             return False
+
+    def resolve_image_url(self, resource_url: str) -> str | None:
+        """将元宝图片资源保护 URL 转换为 COS 预签名直链
+
+        从 URL 中提取 resourceId，调用 /api/resource/v1/download 接口，
+        获取可直接下载的 COS 预签名 URL。
+        """
+        import re as _re
+        import requests as _requests
+
+        match = _re.search(r'resourceId=([^&]+)', resource_url)
+        if not match:
+            print(f"无法从 URL 中提取 resourceId: {resource_url}")
+            return None
+
+        resource_id = match.group(1)
+        url = f"https://{API_DOMAIN}/api/resource/v1/download?resourceId={resource_id}"
+        headers = {
+            "X-ID": self.bot_id or "",
+            "X-Token": self.token or "",
+            "X-Source": "web",
+            "X-AppVersion": "1.0.11",
+            "X-OperationSystem": "linux",
+            "X-Instance-Id": self.instance_id or "",
+            "X-Bot-Version": "2026.3.22",
+        }
+
+        try:
+            resp = _requests.get(url, headers=headers, timeout=30)
+            result = resp.json()
+            cos_url = result.get("realUrl") or result.get("url") or ""
+            if cos_url and cos_url.startswith("http"):
+                return cos_url
+            if result.get("code", 0) == 0:
+                data = result.get("data", {})
+                cos_url = data.get("url") or data.get("realUrl") or ""
+                if cos_url:
+                    return cos_url
+            print(f"获取图片直链失败: {result}")
+            return None
+        except Exception as e:
+            print(f"获取图片直链错误: {e}")
+            return None
+
+    async def _image_download_and_send(self, image_urls: list[str]) -> bool:
+        """下载图片到临时文件并发送到当前群，完成后清理
+
+        Args:
+            image_urls: COS 预签名直链列表
+        Returns:
+            bool: 是否成功发送
+        """
+        import tempfile
+        import os
+
+        temp_dir = tempfile.mkdtemp(prefix="ai_image_")
+        downloaded = []
+
+        try:
+            for i, url in enumerate(image_urls):
+                ext = ".png"  # 默认 png
+                local_path = os.path.join(temp_dir, f"ai_image_{i}{ext}")
+                try:
+                    resp = requests.get(url, timeout=60)
+                    if resp.status_code == 200:
+                        with open(local_path, 'wb') as f:
+                            f.write(resp.content)
+                        downloaded.append(local_path)
+                        print(f"  已下载图片 {i+1}/{len(image_urls)}: {len(resp.content)} 字节")
+                    else:
+                        print(f"  下载图片 {i+1} 失败: HTTP {resp.status_code}")
+                except Exception as e:
+                    print(f"  下载图片 {i+1} 失败: {e}")
+
+            if not downloaded:
+                print("没有成功下载任何图片")
+                return False
+
+            result = await self.send_images_multi(downloaded)
+            return result
+        finally:
+            # 清理临时文件
+            import shutil
+            try:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            except Exception:
+                pass
 
     async def connect(self) -> bool:
         if not self.token and not self.sign_token():
@@ -1431,9 +1526,10 @@ class SpamSender:
         self.seq_no += 1
         return self.codec.encode_conn_msg(head, biz_data)
 
-    def _build_at_message(self, text: str, at_user_id: str, at_nickname: str = "") -> bytes:
+    def _build_at_message(self, text: str, at_user_id: str, at_nickname: str = "", target_group: str = None) -> bytes:
         """构建带艾特的群消息 - TIMCustomElem(艾特) + TIMTextElem(文本)"""
         display_name = at_nickname or at_user_id
+        gc = target_group or self.group_code
 
         # TIMCustomElem (艾特)
         at_data = json.dumps({
@@ -1455,7 +1551,7 @@ class SpamSender:
         # SendGroupMessageReq
         data = b''
         data += self.codec.encode_string(1, self._generate_msg_id())
-        data += self.codec.encode_string(2, self.group_code)
+        data += self.codec.encode_string(2, gc)
         data += self.codec.encode_string(3, self.bot_id or "")
         data += self.codec.encode_string(5, str(random.randint(1, 999999999)))
         data += self.codec.encode_message_field(6, at_elem)
@@ -1906,7 +2002,7 @@ class SpamSender:
             return False
         try:
             if at_user:
-                msg = self._build_at_message(text, at_user, at_nickname)
+                msg = self._build_at_message(text, at_user, at_nickname, target_group=target_group)
             else:
                 msg = self._build_group_msg(text, group_code=target_group)
             await self.ws.send(msg)
@@ -2144,6 +2240,59 @@ class SpamSender:
                                                     )
                                                 await self.send_group_message(text, target_group=target_gc)
                                             asyncio.create_task(_help_query(group_code))
+
+                                # ── 检测元宝图片回复（/ai-image 流程）──
+                                if (self._pending_image_future is not None
+                                        and not self._pending_image_future.done()
+                                        and group_code == IMAGE_GROUP_CODE
+                                        and sender_id == YUANBAO_BOT_ID):
+                                    # 从 TIMImageElem 提取图片 URL
+                                    # 注意: image_info_array 包含同一张图的不同分辨率（缩略图/原图等），
+                                    # 每个 TIMImageElem 只取最后一个（通常是最大/原图）URL
+                                    img_urls_from_elem = []
+                                    if msg_body:
+                                        for elem in msg_body:
+                                            if elem.get("msg_type") == "TIMImageElem":
+                                                mc = elem.get("msg_content", {})
+                                                img_array = mc.get("image_info_array", [])
+                                                # 取该图片的最后一个 URL（原图/最大分辨率）
+                                                last_url = None
+                                                for img_info in img_array:
+                                                    if isinstance(img_info, dict) and img_info.get("url"):
+                                                        last_url = img_info["url"]
+                                                if last_url:
+                                                    img_urls_from_elem.append(last_url)
+                                    # 同时检测 text 中的 ![image](url) 格式
+                                    import re as _re_img
+                                    img_urls_from_text = _re_img.findall(r'!\[image\]\(([^)]+)\)', text_content)
+                                    # 合并并去重
+                                    all_urls = list(dict.fromkeys(img_urls_from_elem + img_urls_from_text))
+                                    if all_urls:
+                                        print(f"\n[AI-Image] 检测到元宝图片回复，发现 {len(all_urls)} 张图片...")
+                                        resolved = []
+                                        for u in all_urls:
+                                            cos_url = self.resolve_image_url(u)
+                                            if cos_url:
+                                                resolved.append(cos_url)
+                                                print(f"  直链: {cos_url[:80]}...")
+                                        if resolved:
+                                            try:
+                                                await self._image_download_and_send(resolved)
+                                                print(f"[AI-Image] 图片已发送到当前群")
+                                            except Exception as e:
+                                                print(f"[AI-Image] 发送图片失败: {e}")
+                                        future = self._pending_image_future
+                                        self._pending_image_future = None
+                                        if not future.done():
+                                            future.set_result(True)
+                                    else:
+                                        # 有文字回复但没图片，也视为完成（带结果）
+                                        if text_content.strip():
+                                            print(f"\n[AI-Image] 元宝回复了文字（可能未生成图片）: {text_content[:80]}")
+                                            future = self._pending_image_future
+                                            self._pending_image_future = None
+                                            if not future.done():
+                                                future.set_result(False)
                             except (json.JSONDecodeError, Exception):
                                 pass
                         continue
@@ -2314,6 +2463,7 @@ def print_help():
     print("  /recent [N]       - 查看最近 N 条消息（默认10条）")
     print("  /paste            - 多行粘贴模式，输入 /end 发送")
     print("  /big 内容 字号    - 发送放大 LaTeX 文本")
+    print("  /ai-image <提示词>  - AI 生成图片（需配置 IMAGE_GROUP_CODE）")
     print("  /reconnect        - 手动重新连接 WebSocket（断线后使用）")
     print("  /groupinfo        - 查询当前群信息（群名、群主、人数等）")
     print("  /auto             - 查看自动回复状态")
@@ -2504,6 +2654,42 @@ async def interactive_mode():
                         print("发送失败")
                 else:
                     print("格式: /big 内容 字号")
+                continue
+
+            # ===== /ai-image AI 生成图片 =====
+            if raw.startswith("/ai-image"):
+                prompt = raw[len("/ai-image"):].strip()
+                if not prompt:
+                    print("格式: /ai-image <提示词>")
+                    continue
+                if not IMAGE_GROUP_CODE:
+                    print("错误: 未配置 IMAGE_GROUP_CODE")
+                    continue
+                # 创建 Future 并等待元宝回复
+                loop = asyncio.get_event_loop()
+                future = loop.create_future()
+                sender._pending_image_future = future
+                # 向图片群发送 System 指令 @元宝
+                system_msg = (f"System:请生成一张图片，不要发多余文字说明，"
+                              f"直接发送图片，图片比例 1024x1024\n{prompt}")
+                print(f"[AI-Image] 正在发送图片生成请求: {prompt}")
+                ok = await sender.send_group_message(system_msg, at_user=YUANBAO_BOT_ID, at_nickname=YUANBAO_NICKNAME, target_group=IMAGE_GROUP_CODE)
+                if ok:
+                    print(f"[AI-Image] 请求已发送，等待元宝回复...")
+                    try:
+                        result = await asyncio.wait_for(future, timeout=120)
+                        if result:
+                            print(f"[AI-Image] 完成")
+                        else:
+                            print(f"[AI-Image] 处理失败（未检测到图片回复）")
+                    except asyncio.TimeoutError:
+                        print(f"[AI-Image] 超时: 元宝未在 120 秒内回复图片")
+                        if not future.done():
+                            future.cancel()
+                        sender._pending_image_future = None
+                else:
+                    print("[AI-Image] 发送请求失败")
+                    sender._pending_image_future = None
                 continue
 
             # 切换目标群
