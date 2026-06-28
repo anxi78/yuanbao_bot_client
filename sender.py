@@ -1037,6 +1037,8 @@ class SpamSender:
         self.on_push_message: Optional[callable] = None
         # /auto 自动回复开关（None=关闭，字符串=回复文本）
         self.auto_reply_text: Optional[str] = None
+        # /auto <text> on at: 仅被艾特时才自动回复
+        self.auto_reply_at_only: bool = False
         # /ai-image: 等待元宝图片回复的 Future
         self._pending_image_future: Optional[asyncio.Future] = None
         # /auto on yb 代理模式队列: deque of {"future", "target_group", "ref_msg_id", "ref_sender_name", "original_content"}
@@ -2529,7 +2531,8 @@ def print_help():
     print("  /reconnect        - 手动重新连接 WebSocket（断线后使用）")
     print("  /groupinfo        - 查询当前群信息（群名、群主、人数等）")
     print("  /auto               - 查看自动回复状态")
-    print("  /auto <text> on     - 开启自动回复 / 代理模式（yb=代理）")
+    print("  /auto <text> on     - 开启自动回复 / 代理模式（yb=代理），全部消息触发")
+    print("  /auto <text> on at  - 同上，但仅被艾特时触发")
     print("  /auto off           - 关闭自动回复")
     print("  /help             - 显示帮助")
     print("  /exit             - 退出")
@@ -2586,6 +2589,22 @@ async def interactive_mode():
         sender_name = cache_entry.get("sender_name", "")
         content = cache_entry.get("content", "")
         msg_id = cache_entry.get("msg_id", "")
+
+        # ── 仅艾特时触发（/auto <text> on at）────
+        if sender.auto_reply_at_only and group_code:
+            is_at_bot = False
+            msg_body = push_json.get("msg_body", [])
+            for elem in msg_body:
+                if elem.get("msg_type") == "TIMCustomElem":
+                    try:
+                        cd = json.loads(elem.get("msg_content", {}).get("data", "{}"))
+                        if cd.get("elem_type") == 1002 and cd.get("user_id") == sender.bot_id:
+                            is_at_bot = True
+                            break
+                    except Exception:
+                        pass
+            if not is_at_bot:
+                return  # 未被艾特，不触发
 
         # ── 代理模式（/auto on yb）────
         if reply_text == "yb":
@@ -2681,27 +2700,39 @@ async def interactive_mode():
                     asyncio.create_task(sender._auto_reconnect())
                 continue
 
-            # ===== /auto 自动回复开关（格式: /auto <text> on  /  /auto off）=====
+            # ===== /auto 自动回复开关（格式: /auto <text> on [at]  /  /auto off）=====
             if raw.startswith("/auto "):
                 arg = raw[6:].strip()
                 if arg == "off":
                     sender.auto_reply_text = None
+                    sender.auto_reply_at_only = False
                     print("自动回复已关闭")
+                elif len(arg) > 6 and arg.endswith(" on at"):
+                    text = arg[:-6].strip()
+                    if text:
+                        sender.auto_reply_text = text
+                        sender.auto_reply_at_only = True
+                        mode = "代理模式" if text == "yb" else "自动回复"
+                        print(f"{mode}已开启（仅被艾特时触发）：回复文本 -> \"{text}\"")
+                    else:
+                        print("格式: /auto <text> on [at]  或  /auto off")
                 elif len(arg) > 3 and arg.endswith(" on"):
                     text = arg[:-3].strip()
                     if text:
                         sender.auto_reply_text = text
+                        sender.auto_reply_at_only = False
                         mode = "代理模式" if text == "yb" else "自动回复"
                         print(f"{mode}已开启：回复文本 -> \"{text}\"")
                     else:
                         print("格式: /auto <text> on  或  /auto off")
                 else:
-                    print("格式: /auto <text> on  或  /auto off")
+                    print("格式: /auto <text> on [at]  或  /auto off")
                 continue
             if raw == "/auto":
                 if sender.auto_reply_text:
                     mode = "代理模式" if sender.auto_reply_text == "yb" else "自动回复"
-                    print(f"{mode}已开启，当前文本: \"{sender.auto_reply_text}\"")
+                    at_suffix = "（仅被艾特时触发）" if sender.auto_reply_at_only else ""
+                    print(f"{mode}已开启，当前文本: \"{sender.auto_reply_text}\"{at_suffix}")
                 else:
                     print("自动回复已关闭")
                 continue
