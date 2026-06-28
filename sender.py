@@ -2286,13 +2286,25 @@ class SpamSender:
                                         if not future.done():
                                             future.set_result(True)
                                     else:
-                                        # 有文字回复但没图片，也视为完成（带结果）
+                                        # 有文字回复但没图片，等待2秒看是否后跟图片
+                                        # （元宝经常先发一段说明文字再发图片）
                                         if text_content.strip():
-                                            print(f"\n[AI-Image] 元宝回复了文字（可能未生成图片）: {text_content[:80]}")
-                                            future = self._pending_image_future
-                                            self._pending_image_future = None
-                                            if not future.done():
-                                                future.set_result(False)
+                                            print(f"\n[AI-Image] 元宝回复了文字，等待2秒检测是否后跟图片: {text_content[:80]}")
+                                            _img_future = self._pending_image_future
+                                            if _img_future is not None and not _img_future.done():
+                                                async def _wait_for_image_after_text(fut, sender_ref, delay=2.0):
+                                                    try:
+                                                        await asyncio.sleep(delay)
+                                                        if not fut.done():
+                                                            print(f"[AI-Image] 等待2秒后仍未检测到图片")
+                                                            # 只清理同一个 future，避免覆盖新发起的请求
+                                                            if sender_ref._pending_image_future is fut:
+                                                                sender_ref._pending_image_future = None
+                                                            if not fut.done():
+                                                                fut.set_result(False)
+                                                    except Exception:
+                                                        pass
+                                                asyncio.create_task(_wait_for_image_after_text(_img_future, self))
                             except (json.JSONDecodeError, Exception):
                                 pass
                         continue
