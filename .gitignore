@@ -7,3 +7,4 @@ yuanbao-openclaw-plugin/
 config.json
 yuanbao_bot_android/
 install.sh
+.gitignore
