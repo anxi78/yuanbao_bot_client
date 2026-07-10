@@ -47,7 +47,8 @@ if [ ! -d "$VENV_DIR" ]; then
     python3 -m venv "$VENV_DIR"
 fi
 
-"$VENV_DIR/bin/pip" install -r "$PROJECT_DIR/requirements.txt"
+"$VENV_DIR/bin/pip" install -r "$PROJECT_DIR/requirements.txt" \
+    -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 4. 生成 ybbot 启动器
 BIN_DIR="$HOME_DIR/.local/bin"
