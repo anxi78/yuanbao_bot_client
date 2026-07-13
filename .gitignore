@@ -1,10 +1,8 @@
-venv/
+# 不被 iFlow CLI 提交到仓库
+AGENTS.md
+
+# Python
 __pycache__/
-*.pyc
-yb/
+venv/
 bot.log
-yuanbao-openclaw-plugin/
-config.json
-yuanbao_bot_android/
-install.sh
-.gitignore
+downloads/
