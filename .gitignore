@@ -1,6 +1,12 @@
 # 不被 iFlow CLI 提交到仓库
 AGENTS.md
 
+# 配置文件（含凭证密钥）
+config.json
+
+# 终端残留日志
+root
+
 # Python
 __pycache__/
 venv/

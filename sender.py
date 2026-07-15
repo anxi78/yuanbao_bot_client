@@ -1424,18 +1424,19 @@ class SpamSender:
         except Exception as e:
             return {}
 
-    def _build_sticker_msg(self, sticker_name: str) -> bytes:
+    def _build_sticker_msg(self, sticker_name: str, group_code: str = None) -> bytes:
         """构建贴纸群消息"""
         sticker = self.STICKERS.get(sticker_name)
         if not sticker:
             return b''
+        gc = group_code or self.group_code
         face_elem = self.codec.encode_tim_face_elem(
             sticker["sticker_id"], sticker["package_id"], sticker["name"],
             sticker["width"], sticker["height"], sticker["formats"]
         )
         data = b''
         data += self.codec.encode_string(1, self._generate_msg_id())
-        data += self.codec.encode_string(2, self.group_code)
+        data += self.codec.encode_string(2, gc)
         data += self.codec.encode_string(3, self.bot_id or "")
         data += self.codec.encode_string(5, str(random.randint(1, 999999999)))
         data += self.codec.encode_message_field(6, face_elem)
@@ -1447,11 +1448,12 @@ class SpamSender:
         self.seq_no += 1
         return self.codec.encode_conn_msg(head, data)
 
-    def _build_sticker_with_text_msg(self, sticker_name: str, text: str) -> bytes:
+    def _build_sticker_with_text_msg(self, sticker_name: str, text: str, group_code: str = None) -> bytes:
         """构建贴纸+文本的群消息"""
         sticker = self.STICKERS.get(sticker_name)
         if not sticker:
             return b''
+        gc = group_code or self.group_code
         face_elem = self.codec.encode_tim_face_elem(
             sticker["sticker_id"], sticker["package_id"], sticker["name"],
             sticker["width"], sticker["height"], sticker["formats"]
@@ -1463,7 +1465,7 @@ class SpamSender:
 
         data = b''
         data += self.codec.encode_string(1, self._generate_msg_id())
-        data += self.codec.encode_string(2, self.group_code)
+        data += self.codec.encode_string(2, gc)
         data += self.codec.encode_string(3, self.bot_id or "")
         data += self.codec.encode_string(5, str(random.randint(1, 999999999)))
         data += self.codec.encode_message_field(6, face_elem)
@@ -1476,11 +1478,12 @@ class SpamSender:
         self.seq_no += 1
         return self.codec.encode_conn_msg(head, data)
 
-    def _build_sticker_with_at_msg(self, sticker_name: str, text: str, at_user_id: str, at_nickname: str = "") -> bytes:
+    def _build_sticker_with_at_msg(self, sticker_name: str, text: str, at_user_id: str, at_nickname: str = "", group_code: str = None) -> bytes:
         """构建贴纸+艾特+文本的群消息"""
         sticker = self.STICKERS.get(sticker_name)
         if not sticker:
             return b''
+        gc = group_code or self.group_code
         display_name = at_nickname or at_user_id
 
         # TIMCustomElem (艾特)
@@ -1504,12 +1507,38 @@ class SpamSender:
 
         data = b''
         data += self.codec.encode_string(1, self._generate_msg_id())
-        data += self.codec.encode_string(2, self.group_code)
+        data += self.codec.encode_string(2, gc)
         data += self.codec.encode_string(3, self.bot_id or "")
         data += self.codec.encode_string(5, str(random.randint(1, 999999999)))
         data += self.codec.encode_message_field(6, at_elem)
         data += self.codec.encode_message_field(6, face_elem)
         data += self.codec.encode_message_field(6, text_elem)
+
+        head = self.codec.encode_head(
+            cmd_type=CMD_TYPE_REQUEST, cmd=BIZ_CMD_SEND_GROUP, seq_no=self.seq_no,
+            msg_id=self._generate_msg_id(), module=BIZ_MODULE
+        )
+        self.seq_no += 1
+        return self.codec.encode_conn_msg(head, data)
+
+    def _build_raw_sticker_msg(self, sticker_name: str, sticker_id: str, package_id: str,
+                                group_code: str = None) -> bytes:
+        """构建任意贴纸消息（不依赖 self.STICKERS 字典）"""
+        gc = group_code or self.group_code
+        # 使用已知贴纸的默认尺寸格式，或 fallback 默认值
+        known = self.STICKERS.get(sticker_name, {})
+        width = known.get("width", 128)
+        height = known.get("height", 128)
+        formats = known.get("formats", "png")
+        face_elem = self.codec.encode_tim_face_elem(
+            sticker_id, package_id, sticker_name, width, height, formats
+        )
+        data = b''
+        data += self.codec.encode_string(1, self._generate_msg_id())
+        data += self.codec.encode_string(2, gc)
+        data += self.codec.encode_string(3, self.bot_id or "")
+        data += self.codec.encode_string(5, str(random.randint(1, 999999999)))
+        data += self.codec.encode_message_field(6, face_elem)
 
         head = self.codec.encode_head(
             cmd_type=CMD_TYPE_REQUEST, cmd=BIZ_CMD_SEND_GROUP, seq_no=self.seq_no,
@@ -1737,16 +1766,18 @@ class SpamSender:
         mc += pb_msg(8, img_info)     # image_info_array 字段编号为 8
         return pb_string(1, "TIMImageElem") + pb_msg(2, mc)
 
-    def _build_image_msg(self, images: list) -> bytes:
+    def _build_image_msg(self, images: list, group_code: str = None) -> bytes:
         """构建多图群消息（msgBody 包含多个 TIMImageElem）
         
         Args:
             images: 列表，每项为 (url, uuid, size, width, height) 元组
+            group_code: 目标群号，不传则用 self.group_code
         """
+        gc = group_code or self.group_code
         # 构建 SendGroupMessageReq，msgBody 包含多个 TIMImageElem
         data = b''
         data += pb_string(1, self._generate_msg_id())                # msg_id
-        data += pb_string(2, self.group_code)                        # group_code
+        data += pb_string(2, gc)                                     # group_code
         data += pb_string(3, self.bot_id or "")                      # from_account
         data += pb_string(4, "")                                     # to_account（空）
         data += pb_string(5, str(random.randint(1, 999999999)))      # random
@@ -1762,14 +1793,15 @@ class SpamSender:
         return encode_conn_msg(CMD_TYPE_REQUEST, BIZ_CMD_SEND_GROUP, seq_no,
                                msg_id, BIZ_MODULE, data)
 
-    def _build_file_msg(self, url: str, uuid: str = "", file_size: int = 0, file_name: str = "") -> bytes:
+    def _build_file_msg(self, url: str, uuid: str = "", file_size: int = 0, file_name: str = "", group_code: str = None) -> bytes:
         """构建文件群消息（TIMFileElem 构造）"""
+        gc = group_code or self.group_code
         # 使用 codec 编码文件元素
         file_elem = self.codec.encode_tim_file_elem(url, uuid, file_size, file_name)
         # 构建 SendGroupMessageReq
         data = b''
         data += self.codec.encode_string(1, self._generate_msg_id())                # msg_id
-        data += self.codec.encode_string(2, self.group_code)                        # group_code
+        data += self.codec.encode_string(2, gc)                                     # group_code
         data += self.codec.encode_string(3, self.bot_id or "")                      # from_account
         data += self.codec.encode_string(4, "")                                     # to_account（空）
         data += self.codec.encode_string(5, str(random.randint(1, 999999999)))      # random
@@ -2039,7 +2071,8 @@ class SpamSender:
             return False
 
     async def send_sticker_message(self, sticker_name: str, text: str = "",
-                                    at_user: str = None, at_nickname: str = None) -> bool:
+                                    at_user: str = None, at_nickname: str = None,
+                                    target_group: str = None) -> bool:
         """发送贴纸消息，支持纯贴纸、贴纸+文本、贴纸+艾特+文本"""
         if not self.connected or not self.ws:
             return False
@@ -2047,11 +2080,11 @@ class SpamSender:
             return False
         try:
             if at_user:
-                msg = self._build_sticker_with_at_msg(sticker_name, text, at_user, at_nickname)
+                msg = self._build_sticker_with_at_msg(sticker_name, text, at_user, at_nickname, group_code=target_group)
             elif text:
-                msg = self._build_sticker_with_text_msg(sticker_name, text)
+                msg = self._build_sticker_with_text_msg(sticker_name, text, group_code=target_group)
             else:
-                msg = self._build_sticker_msg(sticker_name)
+                msg = self._build_sticker_msg(sticker_name, group_code=target_group)
             await self.ws.send(msg)
             return True
         except Exception:
@@ -2059,16 +2092,97 @@ class SpamSender:
 
     async def _proxy_worker_loop(self):
         """后台任务：顺序处理代理队列中的请求"""
+        type_names = {"sticker": "贴纸", "image": "图片", "file": "文件"}
         while self._proxy_queue:
             item = self._proxy_queue[0]
-            proxy_msg = f"来自{item['ref_sender_name']}的消息: {item['original_content']}"
-            print(f"\n[Auto-Proxy] 转发消息到元宝: {proxy_msg[:60]}...")
-            ok = await self.send_group_message(
-                proxy_msg,
-                at_user=YUANBAO_BOT_ID, at_nickname=YUANBAO_NICKNAME,
-                target_group=IMAGE_GROUP_CODE
-            )
+            media_info = item.get("media_info", {})
+            media_type = media_info.get("type", "")
+            sender_name = item['ref_sender_name']
+            ok = False
+
+            # ── 根据消息类型转发实际内容到 IMAGE_GROUP_CODE ──
+            if media_type == "sticker":
+                sticker_name = media_info.get("sticker_name", "")
+                sticker_id = media_info.get("sticker_id", "")
+                package_id = media_info.get("package_id", "")
+                if sticker_name and sticker_id and (sticker_name in self.STICKERS):
+                    ok = await self.send_sticker_message(
+                        sticker_name, text=f"来自{sender_name}的消息",
+                        target_group=IMAGE_GROUP_CODE
+                    )
+                elif sticker_name and sticker_id:
+                    # 不在本地库的贴纸，用 raw 方法原样发送
+                    msg = self._build_raw_sticker_msg(sticker_name, sticker_id, package_id, group_code=IMAGE_GROUP_CODE)
+                    try:
+                        await self.ws.send(msg)
+                        ok = True
+                        print(f"[Auto-Proxy] 已转发贴纸 {sticker_name} 到元宝群")
+                    except Exception as e:
+                        print(f"[Auto-Proxy] 贴纸转发失败: {e}")
+                else:
+                    ok = await self.send_group_message(
+                        f"来自{sender_name}的消息: [贴纸]",
+                        target_group=IMAGE_GROUP_CODE
+                    )
+            elif media_type == "image":
+                image_urls = media_info.get("image_urls", [])
+                if image_urls:
+                    uuid = media_info.get("image_uuid", "")
+                    width = media_info.get("image_width", 0)
+                    height = media_info.get("image_height", 0)
+                    size = media_info.get("image_size", 0)
+                    images = [(url, uuid, size, width, height) for url in image_urls]
+                    msg = self._build_image_msg(images, group_code=IMAGE_GROUP_CODE)
+                    try:
+                        await self.ws.send(msg)
+                        ok = True
+                        print(f"[Auto-Proxy] 已转发 {len(image_urls)} 张图片到元宝群")
+                    except Exception as e:
+                        print(f"[Auto-Proxy] 图片转发失败: {e}")
+                else:
+                    ok = await self.send_group_message(
+                        f"来自{sender_name}的消息: [图片]",
+                        target_group=IMAGE_GROUP_CODE
+                    )
+            elif media_type == "file":
+                file_url = media_info.get("file_url", "")
+                file_name = media_info.get("file_name", "")
+                file_uuid = media_info.get("file_uuid", "")
+                file_size_val = media_info.get("file_size", 0)
+                if file_url:
+                    msg = self._build_file_msg(file_url, uuid=file_uuid, file_size=file_size_val,
+                                               file_name=file_name, group_code=IMAGE_GROUP_CODE)
+                    try:
+                        await self.ws.send(msg)
+                        ok = True
+                        print(f"[Auto-Proxy] 已转发文件 {file_name} 到元宝群")
+                    except Exception as e:
+                        print(f"[Auto-Proxy] 文件转发失败: {e}")
+                else:
+                    ok = await self.send_group_message(
+                        f"来自{sender_name}的消息: [文件]",
+                        target_group=IMAGE_GROUP_CODE
+                    )
+            else:
+                # 文本消息 — 直接转发到 IMAGE_GROUP_CODE
+                proxy_msg = f"来自{sender_name}的消息: {item['original_content']}"
+                ok = await self.send_group_message(
+                    proxy_msg,
+                    at_user=YUANBAO_BOT_ID, at_nickname=YUANBAO_NICKNAME,
+                    target_group=IMAGE_GROUP_CODE
+                )
+
             if ok:
+                # ── 非文本消息：在 IMAGE_GROUP 中 @元宝 通知 ──
+                if media_type in ("sticker", "image", "file"):
+                    at_msg = f"@{YUANBAO_NICKNAME} 收到一条{type_names[media_type]}消息"
+                    print(f"[Auto-Proxy] 发送 @元宝 通知到元宝群: {at_msg}")
+                    await self.send_group_message(
+                        at_msg,
+                        at_user=YUANBAO_BOT_ID, at_nickname=YUANBAO_NICKNAME,
+                        target_group=IMAGE_GROUP_CODE
+                    )
+
                 print(f"[Auto-Proxy] 已发送，等待元宝回复...")
                 try:
                     result = await asyncio.wait_for(item["future"], timeout=120)
@@ -2164,6 +2278,7 @@ class SpamSender:
                                 push_json = json.loads(biz_data)
                                 # 从 msg_body 中提取文本内容（JSON 格式）
                                 text_content = ""
+                                media_info = {}
                                 msg_body = push_json.get("msg_body", [])
                                 if msg_body and len(msg_body) > 0:
                                     for elem in msg_body:
@@ -2180,7 +2295,53 @@ class SpamSender:
                                                     text_content += custom_data.get("text", "") + " "
                                             except:
                                                 pass
-                                
+                                        elif msg_type == "TIMFaceElem":
+                                            # 贴纸消息
+                                            try:
+                                                face_data_str = msg_content.get("data", "")
+                                                if face_data_str:
+                                                    face_data = json.loads(face_data_str) if isinstance(face_data_str, str) else json.loads(face_data_str.decode())
+                                                    sticker_name = face_data.get("name", "")
+                                                    text_content += f"[贴纸: {sticker_name}]" if sticker_name else "[贴纸]"
+                                                    media_info["type"] = "sticker"
+                                                    media_info["sticker_id"] = face_data.get("sticker_id", "")
+                                                    media_info["sticker_name"] = sticker_name
+                                                    media_info["package_id"] = face_data.get("package_id", "")
+                                                else:
+                                                    text_content += "[贴纸]"
+                                                    media_info["type"] = "sticker"
+                                            except:
+                                                text_content += "[贴纸]"
+                                                media_info["type"] = "sticker"
+                                        elif msg_type == "TIMImageElem":
+                                            # 图片消息
+                                            img_array = msg_content.get("image_info_array", [])
+                                            img_urls = []
+                                            last_info = {}
+                                            for img_info in img_array:
+                                                if isinstance(img_info, dict) and img_info.get("url"):
+                                                    last_info = img_info
+                                            if last_info.get("url"):
+                                                img_urls.append(last_info["url"])
+                                            text_content += "[图片]"
+                                            media_info["type"] = "image"
+                                            media_info["image_urls"] = img_urls
+                                            media_info["image_uuid"] = msg_content.get("uuid", "")
+                                            media_info["image_width"] = last_info.get("width", 0)
+                                            media_info["image_height"] = last_info.get("height", 0)
+                                            media_info["image_size"] = last_info.get("size", 0)
+                                        elif msg_type == "TIMFileElem":
+                                            # 文件消息
+                                                                                file_name = msg_content.get("fileName", "")
+                                                                                file_url = msg_content.get("url", "")
+                                                                                file_uuid = msg_content.get("uuid", "")
+                                                                                file_size_val = msg_content.get("fileSize", 0)
+                                                                                text_content += f"[文件: {file_name}]" if file_name else "[文件]"
+                                                                                media_info["type"] = "file"
+                                                                                media_info["file_name"] = file_name
+                                                                                media_info["file_url"] = file_url
+                                                                                media_info["file_uuid"] = file_uuid
+                                                                                media_info["file_size"] = file_size_val                                
                                 sender_name = push_json.get("sender_nickname", "")
                                 sender_id = push_json.get("from_account", "")
                                 group_code = push_json.get("group_code", "")
@@ -2207,6 +2368,7 @@ class SpamSender:
                                     "content": text_content,
                                     "msg_type": push_json.get("callback_command", ""),
                                     "msg_id": push_json.get("msg_id", ""),
+                                    "media_info": media_info,
                                 }
                                 self.msg_cache.append(cache_entry)
                                 # 只保留最近 1000 条
@@ -2624,6 +2786,7 @@ async def interactive_mode():
                 "ref_msg_id": msg_id,
                 "ref_sender_name": sender_name,
                 "original_content": content,
+                "media_info": cache_entry.get("media_info", {}),
             })
             print(f"[Auto-Proxy] 请求已加入队列（共 {len(sender._proxy_queue)} 个）")
             if sender._proxy_worker_task is None or sender._proxy_worker_task.done():
