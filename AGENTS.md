@@ -14,7 +14,7 @@
 
 | 文件 | 说明 |
 |------|------|
-| `sender.py` (3625 行) | 核心文件 — 包含全部逻辑 |
+| `sender.py` (3829 行) | 核心文件 — 包含全部逻辑 |
 | `config.json` | 运行时配置 |
 | `config.example.json` | 配置模板 |
 | `requirements.txt` | Python 依赖 |
@@ -66,6 +66,7 @@ sender.py 按顺序包含以下模块：
 - `user_nicknames` — 用户昵称缓存
 - `nickname_to_user` — 昵称到用户 ID 的反向映射
 - `connected` — 连接标志
+- `_temp_app_key`, `_temp_app_secret` — 临时认证凭据（/auth 命令切换，不写 config.json）
 
 **关键方法**:
 | 方法 | 功能 |
@@ -97,6 +98,7 @@ sender.py 按顺序包含以下模块：
 | `handle_image_push(data)` | 检测和下载 AI 生成图片 |
 | `start_proxy_consumer()` | 启动代理模式消费者（FIFO 队列） |
 | `trigger_ai_image(prompt)` | 触发 AI 图片生成 |
+| `set_auth(app_key, app_secret)` | 临时切换认证凭据（仅本次运行生效） |
 
 ### 5. 自动重连机制
 - `_reconnect_loop()` — 后台任务，WebSocket 断开时自动重连
@@ -105,6 +107,13 @@ sender.py 按顺序包含以下模块：
 
 ### 6. 交互式循环 (main/interactive_mode)
 使用 `prompt_toolkit` 提供交互式 CLI，支持 30+ 命令的解析和分发。
+
+命令处理流程：
+1. 输入内容依次匹配各命令前缀
+2. 命中 `/auth` → 交互式输入 APP_KEY/APP_SECRET，调用 `set_auth()` 临时切换凭据并自动重连
+3. 命中 `/auto` → 自动回复/代理模式开关
+4. 命中其他命令 → 按相应逻辑处理
+5. 无匹配 → 作为普通消息发送
 
 ## 协议细节
 

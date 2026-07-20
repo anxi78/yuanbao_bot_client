@@ -132,6 +132,7 @@ python sender.py
 | `/ai-image <提示词>` | AI 生成图片（需配置 `IMAGE_GROUP_CODE`） |
 | `/recent [N]` | 查看最近 N 条消息（默认 10 条），序号用于 `/reply` |
 | `/reconnect` | 手动重新连接 WebSocket |
+| `/auth` | 临时切换 APP_KEY 和 APP_SECRET（仅本次运行生效，不写 config.json） |
 | `/help` | 显示帮助 |
 | `/exit` | 退出 |
 
