@@ -2663,14 +2663,18 @@ class SpamSender:
 
 
 def print_banner():
-    print("\033[96m=" * 56)
+    ascii_path = os.path.join(os.path.dirname(__file__), "yuanbao-ascii.txt")
+    if os.path.exists(ascii_path):
+        with open(ascii_path) as f:
+            print(f.read(), end="")
+    print("\033[92m" + "=" * 56)
     print(f"  元宝 Bot 发送器  v{__version__}")
     print("=" * 56)
     print()
 
 
 def print_help():
-    print("\033[96m命令列表:")
+    print("\033[92m命令列表:")
     print("  <文字>            - 发送普通消息")
     print("  /at 用户ID 内容   - 艾特指定用户发送")
     print("  /spam 内容 次数   - 普通刷屏")
@@ -2837,7 +2841,7 @@ async def interactive_mode():
             continue
 
         try:
-            raw = await async_input("\033[96myuanbao>\033[0m")
+            raw = await async_input("\033[92myuanbao>\033[0m")
             raw = raw.rstrip("\r\n")
             if not raw:
                 continue
@@ -3026,7 +3030,7 @@ async def interactive_mode():
                     sender.group_code = new_group
                     # 切换群后清空用户缓存并自动获取新群成员
                     sender.user_db.clear()
-                    print(f"\033[96m目标群已切换为: {new_group}")
+                    print(f"\033[92m目标群已切换为: {new_group}")
                     print("正在自动获取新群成员列表...")
                     if await sender.auto_fetch_members():
                         print(f"已缓存 {len(sender.user_db)} 名成员昵称")
