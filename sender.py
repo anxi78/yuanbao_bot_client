@@ -42,7 +42,7 @@ COMMANDS = sorted([
     "/sticker", "/stickerlist", "/stickerfind",
     "/dm", "/dmspam", "/members", "/myid", "/recent",
     "/paste", "/big", "/auto", "/reconnect", "/interval",
-    "/help", "/exit",
+    "/auth", "/help", "/exit",
 ], key=len, reverse=True)
 
 # 命令中文描述（用于 SyncInformation 命令同步）
@@ -79,6 +79,7 @@ COMMAND_DESCRIPTIONS: dict[str, str] = {
     "/reconnect": "手动重连 WebSocket",
     "/interval": "设置刷屏间隔",
     "/groupinfo": "查询当前群信息",
+    "/auth": "临时切换 APP_KEY 和 APP_SECRET（仅本次运行生效）",
     "/help": "显示帮助",
     "/exit": "退出程序",
 }
@@ -1046,6 +1047,9 @@ class SpamSender:
         self._proxy_worker_task: Optional[asyncio.Task] = None
         # 自动重连状态
         self._reconnecting: bool = False
+        # 临时认证凭据（/auth 命令临时切换，不写 config.json）
+        self._temp_app_key: Optional[str] = None
+        self._temp_app_secret: Optional[str] = None
 
     # 内置贴纸数据
     STICKERS = {
@@ -1121,11 +1125,14 @@ class SpamSender:
         return beijing.strftime("%Y-%m-%dT%H:%M:%S+08:00")
 
     def sign_token(self) -> bool:
+        # 优先使用临时凭据，否则使用全局配置
+        app_key = self._temp_app_key if self._temp_app_key else APP_KEY
+        app_secret = self._temp_app_secret if self._temp_app_secret else APP_SECRET
         url = f"https://{API_DOMAIN}/api/v5/robotLogic/sign-token"
         nonce = ''.join(random.choices(string.hexdigits.lower(), k=32))
         timestamp = self._get_beijing_time()
-        plain = f"{nonce}{timestamp}{APP_KEY}{APP_SECRET}"
-        signature = hmac.new(APP_SECRET.encode(), plain.encode(), hashlib.sha256).hexdigest()
+        plain = f"{nonce}{timestamp}{app_key}{app_secret}"
+        signature = hmac.new(app_secret.encode(), plain.encode(), hashlib.sha256).hexdigest()
 
         self.instance_id = str(random.randint(1, 1000))
         headers = {
@@ -1135,7 +1142,7 @@ class SpamSender:
             "X-Instance-Id": self.instance_id,
             "X-Bot-Version": "2026.3.22"
         }
-        body = {"app_key": APP_KEY, "nonce": nonce, "signature": signature, "timestamp": timestamp}
+        body = {"app_key": app_key, "nonce": nonce, "signature": signature, "timestamp": timestamp}
 
         try:
             response = requests.post(url, headers=headers, json=body, timeout=30)
@@ -1152,6 +1159,15 @@ class SpamSender:
         except Exception as e:
             print(f"签票错误: {e}")
             return False
+
+    def set_auth(self, app_key: str, app_secret: str) -> None:
+        """临时切换认证凭据（仅本次运行生效，不写入 config.json）"""
+        self._temp_app_key = app_key
+        self._temp_app_secret = app_secret
+        # 清除旧 token，下次 connect/sign_token 时重新签票
+        self.token = None
+        self.bot_id = None
+        print(f"已临时切换认证凭据 (Key: {app_key[:8]}...)")
 
     def resolve_image_url(self, resource_url: str) -> str | None:
         """将元宝图片资源保护 URL 转换为 COS 预签名直链
@@ -2692,6 +2708,7 @@ def print_help():
     print("  /ai-image <提示词>  - AI 生成图片（需配置 IMAGE_GROUP_CODE）")
     print("  /reconnect        - 手动重新连接 WebSocket（断线后使用）")
     print("  /groupinfo        - 查询当前群信息（群名、群主、人数等）")
+    print("  /auth             - 临时切换 APP_KEY 和 APP_SECRET（仅本次运行生效）")
     print("  /auto               - 查看自动回复状态")
     print("  /auto <text> on     - 开启自动回复 / 代理模式（yb=代理），全部消息触发")
     print("  /auto <text> on at  - 同上，但仅被艾特时触发")
@@ -2861,6 +2878,31 @@ async def interactive_mode():
                 else:
                     print("正在手动重连...")
                     asyncio.create_task(sender._auto_reconnect())
+                continue
+
+            # ===== /auth 临时切换认证凭据（不写 config.json）=====
+            if raw == "/auth":
+                print("输入新的认证凭据（仅本次运行生效，不写入配置文件）")
+                new_key = await async_input("APP_KEY: ")
+                new_key = new_key.strip()
+                if not new_key:
+                    print("已取消")
+                    continue
+                new_secret = await async_input("APP_SECRET: ")
+                new_secret = new_secret.strip()
+                if not new_secret:
+                    print("已取消")
+                    continue
+                sender.set_auth(new_key, new_secret)
+                print("正在使用新凭据重新连接...")
+                if sender.connected:
+                    await sender.disconnect()
+                sender.connected = False
+                if await sender.connect():
+                    print("使用新凭据连接成功!")
+                    asyncio.create_task(sender._receive_loop())
+                else:
+                    print("使用新凭据连接失败，请检查 KEY/Secret 是否正确")
                 continue
 
             # ===== /auto 自动回复开关（格式: /auto <text> on [at]  /  /auto off）=====
