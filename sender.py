@@ -14,6 +14,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from collections import deque
+import re
+import shutil
 import requests
 from prompt_toolkit import PromptSession
 from prompt_toolkit.auto_suggest import AutoSuggest, Suggestion, AutoSuggestFromHistory
@@ -37,12 +39,12 @@ logger.propagate = False
 COMMANDS = sorted([
     "/at", "/spam", "/sticker_spam", "/atspam", "/spamat",
     "/multiat", "/atall", "/athuman", "/atbot",
-    "/image", "/ai-image", "/file", "/reply", "/replyspam",
+    "/image", "/ai-image", "/file", "/video", "/reply", "/replyspam",
     "/group", "/groupinfo", "/users", "/adduser", "/deluser",
     "/sticker", "/stickerlist", "/stickerfind",
     "/dm", "/dmspam", "/members", "/myid", "/recent",
     "/paste", "/big", "/auto", "/reconnect", "/interval",
-    "/auth", "/help", "/exit",
+    "/auth", "/send", "/echo", "/help", "/exit",
 ], key=len, reverse=True)
 
 # 命令中文描述（用于 SyncInformation 命令同步）
@@ -59,6 +61,7 @@ COMMAND_DESCRIPTIONS: dict[str, str] = {
     "/image": "发送图片",
     "/ai-image": "AI 生成图片",
     "/file": "发送文件",
+    "/video": "发送视频",
     "/reply": "引用消息回复",
     "/replyspam": "引用刷屏",
     "/group": "切换目标群",
@@ -80,6 +83,8 @@ COMMAND_DESCRIPTIONS: dict[str, str] = {
     "/interval": "设置刷屏间隔",
     "/groupinfo": "查询当前群信息",
     "/auth": "临时切换 APP_KEY 和 APP_SECRET（仅本次运行生效）",
+    "/send": "发送文件内容到群聊",
+    "/echo": "/send 的别名，发送文件内容到群聊",
     "/help": "显示帮助",
     "/exit": "退出程序",
 }
@@ -488,6 +493,49 @@ def encode_tim_file_elem(url: str, uuid: str = "", file_size: int = 0, file_name
     return pb_string(1, "TIMFileElem") + pb_msg(2, mc)
 
 
+def encode_tim_video_elem(
+    video_url: str,
+    video_uuid: str = "",
+    video_size: int = 0,
+    video_second: int = 0,
+    video_format: str = "",
+    thumb_url: str = "",
+    thumb_uuid: str = "",
+    thumb_size: int = 0,
+    thumb_width: int = 0,
+    thumb_height: int = 0,
+    thumb_format: str = "",
+    video_filename: str = "",
+) -> bytes:
+    """编码 TIMVideoFileElem 视频消息元素"""
+    import json
+    data_json = json.dumps({
+        "video_url": video_url,
+        "video_uuid": video_uuid,
+        "video_size": video_size,
+        "video_filename": video_filename,
+        "video_second": video_second,
+        "video_format": video_format,
+        "thumb_url": thumb_url,
+        "thumb_uuid": thumb_uuid,
+        "thumb_size": thumb_size,
+        "thumb_width": thumb_width,
+        "thumb_height": thumb_height,
+        "thumb_format": thumb_format,
+    }, ensure_ascii=False)
+    mc = b""
+    mc += pb_string(4, data_json)
+    if video_uuid:
+        mc += pb_string(2, video_uuid)
+    if video_url:
+        mc += pb_string(10, video_url)
+    if video_size:
+        mc += pb_uint32(11, video_size)
+    if video_filename:
+        mc += pb_string(12, video_filename)
+    return pb_string(1, "TIMVideoFileElem") + pb_msg(2, mc)
+
+
 def encode_get_group_member_list_req(group_code: str) -> bytes:
     """编码 GetGroupMemberListReq"""
     return pb_string(1, group_code)
@@ -632,6 +680,51 @@ class SimpleProtobufCodec:
         elem = b''
         elem += SimpleProtobufCodec.encode_string(1, "TIMFileElem")
         elem += SimpleProtobufCodec.encode_message_field(2, msg_content)
+        return elem
+
+    @staticmethod
+    def encode_tim_video_elem(
+        video_url: str,
+        video_uuid: str = "",
+        video_size: int = 0,
+        video_second: int = 0,
+        video_format: str = "",
+        thumb_url: str = "",
+        thumb_uuid: str = "",
+        thumb_size: int = 0,
+        thumb_width: int = 0,
+        thumb_height: int = 0,
+        thumb_format: str = "",
+        video_filename: str = "",
+    ) -> bytes:
+        """编码 TIMVideoFileElem 视频消息元素"""
+        data_json = json.dumps({
+            "video_url": video_url,
+            "video_uuid": video_uuid,
+            "video_size": video_size,
+            "video_filename": video_filename,
+            "video_second": video_second,
+            "video_format": video_format,
+            "thumb_url": thumb_url,
+            "thumb_uuid": thumb_uuid,
+            "thumb_size": thumb_size,
+            "thumb_width": thumb_width,
+            "thumb_height": thumb_height,
+            "thumb_format": thumb_format,
+        }, ensure_ascii=False)
+        mc = b""
+        mc += SimpleProtobufCodec.encode_string(4, data_json)
+        if video_uuid:
+            mc += SimpleProtobufCodec.encode_string(2, video_uuid)
+        if video_url:
+            mc += SimpleProtobufCodec.encode_string(10, video_url)
+        if video_size:
+            mc += bytes([(11 << 3) | 0]) + SimpleProtobufCodec.encode_varint(video_size)
+        if video_filename:
+            mc += SimpleProtobufCodec.encode_string(12, video_filename)
+        elem = b""
+        elem += SimpleProtobufCodec.encode_string(1, "TIMVideoFileElem")
+        elem += SimpleProtobufCodec.encode_message_field(2, mc)
         return elem
 
     @staticmethod
@@ -1660,7 +1753,6 @@ class SpamSender:
         return self.codec.encode_conn_msg(head, data)
 
 
-
     def _get_upload_info(self, filename: str, file_id: str) -> Optional[dict]:
         """获取图片上传凭证（基于 image/send.py 的 get_upload_info）"""
         if not self.bot_id or not self.token:
@@ -1833,6 +1925,46 @@ class SpamSender:
         )
         return self.codec.encode_conn_msg(head, data)
 
+    def _build_video_msg(
+        self,
+        video_url: str,
+        video_uuid: str = "",
+        video_size: int = 0,
+        video_second: int = 0,
+        video_format: str = "",
+        thumb_url: str = "",
+        thumb_uuid: str = "",
+        thumb_size: int = 0,
+        thumb_width: int = 0,
+        thumb_height: int = 0,
+        thumb_format: str = "",
+        video_filename: str = "",
+        group_code: str = None,
+    ) -> bytes:
+        """构建视频群消息（TIMVideoFileElem 构造）"""
+        gc = group_code or self.group_code
+        video_elem = self.codec.encode_tim_video_elem(
+            video_url, video_uuid, video_size, video_second, video_format,
+            thumb_url, thumb_uuid, thumb_size, thumb_width, thumb_height, thumb_format,
+            video_filename=video_filename,
+        )
+        data = b''
+        data += self.codec.encode_string(1, self._generate_msg_id())                # msg_id
+        data += self.codec.encode_string(2, gc)                                     # group_code
+        data += self.codec.encode_string(3, self.bot_id or "")                      # from_account
+        data += self.codec.encode_string(4, "")                                     # to_account（空）
+        data += self.codec.encode_string(5, str(random.randint(1, 999999999)))      # random
+        data += self.codec.encode_message_field(6, video_elem)                      # msgBody
+        data += self.codec.encode_string(7, "")                                     # refMsgId（空）
+        seq_no = self.seq_no
+        self.seq_no += 1
+        msg_id = self._generate_msg_id()
+        head = self.codec.encode_head(
+            cmd_type=CMD_TYPE_REQUEST, cmd=BIZ_CMD_SEND_GROUP, seq_no=seq_no,
+            msg_id=msg_id, module=BIZ_MODULE
+        )
+        return self.codec.encode_conn_msg(head, data)
+
     async def send_images_multi(self, image_paths: list[str]) -> bool:
         """发送多张图片到当前群（一次消息包含多图）
         
@@ -1956,6 +2088,100 @@ class SpamSender:
             print(f"发送失败: {e}")
             return False
 
+    async def send_video(
+        self,
+        video_path: str,
+        video_second: int = 0,
+        video_format: str = "",
+        thumb_path: str = "",
+        thumb_width: int = 0,
+        thumb_height: int = 0,
+    ) -> bool:
+        """发送视频消息（上传到 COS 后发送）
+
+        Args:
+            video_path: 视频文件路径
+            video_second: 视频时长（秒），可选
+            video_format: 视频格式，可选（如 "mp4"）
+            thumb_path: 视频封面图片路径，可选
+            thumb_width: 封面宽度，可选
+            thumb_height: 封面高度，可选
+        """
+        if not self.connected or not self.ws:
+            return False
+
+        import os
+        import uuid
+
+        if not os.path.exists(video_path):
+            print(f"视频文件不存在: {video_path}")
+            return False
+
+        try:
+            with open(video_path, 'rb') as f:
+                video_data = f.read()
+        except Exception as e:
+            print(f"读取视频文件失败: {e}")
+            return False
+
+        # 视频最大 200MB
+        max_bytes = 200 * 1024 * 1024
+        if len(video_data) > max_bytes:
+            print(f"视频文件过大: {len(video_data) / 1024 / 1024:.1f} MB > 200 MB")
+            return False
+
+        # 自动检测格式
+        filename = os.path.basename(video_path)
+        ext = os.path.splitext(filename)[1].lower().lstrip('.')
+        if not video_format:
+            video_format = ext if ext else "mp4"
+
+        # 上传视频文件
+        video_id = uuid.uuid4().hex
+        config = self._get_upload_info(filename, video_id)
+        if not config:
+            return False
+        video_url = self._upload_to_cos(config, video_data, filename)
+        if not video_url:
+            return False
+
+        # 上传封面（如有）
+        thumb_url = ""
+        thumb_uuid = ""
+        thumb_size = 0
+        thumb_format = ""
+        if thumb_path and os.path.exists(thumb_path):
+            try:
+                with open(thumb_path, 'rb') as f:
+                    thumb_data = f.read()
+                thumb_filename = os.path.basename(thumb_path)
+                thumb_id = uuid.uuid4().hex
+                thumb_config = self._get_upload_info(thumb_filename, thumb_id)
+                if thumb_config:
+                    thumb_url = self._upload_to_cos(thumb_config, thumb_data, thumb_filename)
+                    if thumb_url:
+                        thumb_uuid = thumb_id
+                        thumb_size = len(thumb_data)
+                        thumb_ext = os.path.splitext(thumb_filename)[1].lower().lstrip('.')
+                        thumb_format = thumb_ext if thumb_ext else "png"
+            except Exception as e:
+                print(f"上传封面失败（忽略）: {e}")
+
+        # 发送视频消息（使用 TIMFileElem 方式，与插件一致）
+        try:
+            msg = self._build_file_msg(
+                url=video_url,
+                uuid=video_id,
+                file_size=len(video_data),
+                file_name=filename,
+            )
+            await self.ws.send(msg)
+            print(f"视频已发送: {filename} ({len(video_data)} bytes)")
+            return True
+        except Exception as e:
+            print(f"发送视频失败: {e}")
+            return False
+
     def _build_multi_at_message(self, text: str, at_users: list) -> bytes:
         """构建批量艾特的群消息 - 多个 TIMCustomElem(艾特) + TIMTextElem(文本)
         at_users: [(user_id, nickname), ...]
@@ -2063,7 +2289,6 @@ class SpamSender:
         except Exception as e:
             return False
 
-
     async def send_multi_at_message(self, text: str, at_users: list) -> bool:
         """发送批量艾特消息 — 自动分片，每 20 人一条消息
         每个批次都有文本内容，避免服务端静默丢弃只有 @ 的消息
@@ -2121,18 +2346,19 @@ class SpamSender:
                 sticker_name = media_info.get("sticker_name", "")
                 sticker_id = media_info.get("sticker_id", "")
                 package_id = media_info.get("package_id", "")
-                if sticker_name and sticker_id and (sticker_name in self.STICKERS):
+                if sticker_id and sticker_name and (sticker_name in self.STICKERS):
                     ok = await self.send_sticker_message(
                         sticker_name, text=f"来自{sender_name}的消息",
                         target_group=IMAGE_GROUP_CODE
                     )
-                elif sticker_name and sticker_id:
-                    # 不在本地库的贴纸，用 raw 方法原样发送
+                elif sticker_id:
+                    # 不在本地库的贴纸（或无名贴纸），用 raw 方法原样发送
                     msg = self._build_raw_sticker_msg(sticker_name, sticker_id, package_id, group_code=IMAGE_GROUP_CODE)
                     try:
                         await self.ws.send(msg)
                         ok = True
-                        print(f"[Auto-Proxy] 已转发贴纸 {sticker_name} 到元宝群")
+                        label = sticker_name or f"id={sticker_id}"
+                        print(f"[Auto-Proxy] 已转发贴纸 {label} 到元宝群")
                     except Exception as e:
                         print(f"[Auto-Proxy] 贴纸转发失败: {e}")
                 else:
@@ -2289,6 +2515,7 @@ class SpamSender:
                         biz_data = conn_msg.get("data", b"")
                         logger.debug("PUSH cmd=%r, biz_data_len=%d, biz_data[:100]=%r",
                                      cmd, len(biz_data), biz_data[:100])
+                        logger.debug("PUSH cmd=%r, data_len=%d", cmd, len(biz_data))
                         if cmd == "inbound_message" and biz_data:
                             try:
                                 push_json = json.loads(biz_data)
@@ -2303,7 +2530,7 @@ class SpamSender:
                                         if msg_type == "TIMTextElem":
                                             text_content += msg_content.get("text", "")
                                         elif msg_type == "TIMCustomElem":
-                                            # 艾特消息
+                                            # 自定义消息（艾特消息等）
                                             data_str = msg_content.get("data", "{}")
                                             try:
                                                 custom_data = json.loads(data_str)
@@ -2348,16 +2575,28 @@ class SpamSender:
                                             media_info["image_size"] = last_info.get("size", 0)
                                         elif msg_type == "TIMFileElem":
                                             # 文件消息
-                                                                                file_name = msg_content.get("fileName", "")
+                                                                                file_name = msg_content.get("file_name", "")
                                                                                 file_url = msg_content.get("url", "")
                                                                                 file_uuid = msg_content.get("uuid", "")
-                                                                                file_size_val = msg_content.get("fileSize", 0)
+                                                                                file_size_val = msg_content.get("file_size", 0)
                                                                                 text_content += f"[文件: {file_name}]" if file_name else "[文件]"
                                                                                 media_info["type"] = "file"
                                                                                 media_info["file_name"] = file_name
                                                                                 media_info["file_url"] = file_url
                                                                                 media_info["file_uuid"] = file_uuid
-                                                                                media_info["file_size"] = file_size_val                                
+                                                                                media_info["file_size"] = file_size_val
+                                        elif msg_type == "TIMVideoFileElem":
+                                            # 视频消息
+                                            video_url = msg_content.get("url", "")
+                                            video_uuid = msg_content.get("uuid", "")
+                                            video_size = msg_content.get("file_size", 0)
+                                            video_name = msg_content.get("file_name", "")
+                                            text_content += f"[视频: {video_name}]" if video_name else "[视频]"
+                                            media_info["type"] = "video"
+                                            media_info["url"] = video_url
+                                            media_info["uuid"] = video_uuid
+                                            media_info["size"] = video_size
+                                            media_info["name"] = video_name
                                 sender_name = push_json.get("sender_nickname", "")
                                 sender_id = push_json.get("from_account", "")
                                 group_code = push_json.get("group_code", "")
@@ -2384,6 +2623,7 @@ class SpamSender:
                                     "content": text_content,
                                     "msg_type": push_json.get("callback_command", ""),
                                     "msg_id": push_json.get("msg_id", ""),
+                                    "msg_seq": push_json.get("msg_seq", 0),
                                     "media_info": media_info,
                                 }
                                 self.msg_cache.append(cache_entry)
@@ -2399,7 +2639,6 @@ class SpamSender:
                                         pass
 
                                 # ── 输出群聊内别人的发言 ──
-                                # 过滤 bot 自己的消息（sender_id == self.bot_id）
                                 if sender_id != self.bot_id and text_content:
                                     print(f"\n[{now_str}] {sender_name}: {text_content}")
 
@@ -2535,7 +2774,7 @@ class SpamSender:
                                             print(f"[Auto-Proxy] 已转发到原群")
                                         if not current["future"].done():
                                             current["future"].set_result(reply_content)
-                            except (json.JSONDecodeError, Exception):
+                            except Exception:
                                 pass
                         continue
                     # 处理 Response 类型的消息
@@ -2686,6 +2925,7 @@ def print_help():
     print("  /atbot 内容      - 艾特所有 Bot 成员")
     print("  /image 图片路径  - 发送图片（需绝对路径）")
     print("  /file 文件路径  - 发送文件（需绝对路径）")
+    print("  /video 视频路径  - 发送视频（需绝对路径，最大200MB）")
     print("  /spamat 用户ID 内容 次数  - 同上，艾特+刷屏")
     print("  /reply 序号 内容  - 引用最近消息列表中第N条消息回复")
     print("  /reply 序号 @用户ID 内容  - 引用+艾特回复")
@@ -2717,6 +2957,8 @@ def print_help():
     print("  /auto <text> on     - 开启自动回复 / 代理模式（yb=代理），全部消息触发")
     print("  /auto <text> on at  - 同上，但仅被艾特时触发")
     print("  /auto off           - 关闭自动回复")
+    print("  /send <路径>       - 发送文件内容到群聊（支持绝对路径或 ~/ 开头）")
+    print("  /echo <路径>       - /send 的别名，同上")
     print("  /help             - 显示帮助")
     print("  /exit             - 退出")
     print()
@@ -3337,6 +3579,20 @@ async def interactive_mode():
                     print("格式: /file 文件绝对路径")
                 continue
 
+            # ===== 发送视频 =====
+            # 格式: /video 视频绝对路径
+            if raw.startswith("/video "):
+                video_path = raw[7:].strip()
+                if video_path:
+                    print(f"正在发送视频: {video_path}")
+                    if await sender.send_video(video_path):
+                        print("视频发送成功!")
+                    else:
+                        print("视频发送失败")
+                else:
+                    print("格式: /video 视频绝对路径")
+                continue
+
             # ===== 批量艾特 =====
             # 格式: /multiat 用户ID1,用户ID2,... 内容 或 /multiat @用户ID1,@用户ID2,... 内容
             if raw.startswith("/multiat "):
@@ -3797,6 +4053,58 @@ async def interactive_mode():
                         print("发送失败")
                 else:
                     print("格式: /dm 用户ID 消息内容")
+                continue
+
+            # 发送文件内容
+            if raw.startswith("/send ") or raw.startswith("/echo "):
+                file_path = raw[6:].strip()
+                if not file_path:
+                    print("格式: /send <文件路径>")
+                    continue
+                # 展开 ~ 为 $HOME
+                if file_path.startswith("~/"):
+                    file_path = os.path.expanduser(file_path)
+                elif file_path.startswith("~"):
+                    file_path = os.path.expanduser(file_path)
+                # 转为绝对路径
+                file_path = os.path.abspath(file_path)
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                except FileNotFoundError:
+                    print(f"文件不存在: {file_path}")
+                    continue
+                except Exception as e:
+                    print(f"读取文件失败: {e}")
+                    continue
+                if not content:
+                    print("文件内容为空")
+                    continue
+                # 去掉末尾换行
+                content = content.rstrip("\n")
+                # 剥离 ANSI 转义码（终端颜色码在群聊里无效且可能被服务器静默丢弃）
+                clean_content = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', content)
+                if not clean_content.strip():
+                    print("文件内容仅包含 ANSI 转义码，无可发送的文本")
+                    continue
+                # QQ/WeChat 会折叠首尾连续空格，在每个空格前插入 WORD JOINER (U+2060)
+                # 这样零宽字符作为"东西"隔开，QQ 就不会把连续空格当纯空白修剪了
+                wj = "\u2060"
+                lines = []
+                for line in clean_content.split("\n"):
+                    # 在每个空格前插入 WORD JOINER
+                    lines.append(line.replace(" ", wj + " "))
+                clean_content = "\n".join(lines)
+                # 显示预览
+                preview = clean_content[:100].replace("\n", "\\n")
+                if len(clean_content) > 100:
+                    preview += "..."
+                print(f"文件: {file_path} ({len(content)} 字符)")
+                print(f"内容预览: {preview}")
+                if await sender.send_group_message(clean_content):
+                    print(f"文件内容已发送")
+                else:
+                    print("发送失败")
                 continue
 
             # 普通消息

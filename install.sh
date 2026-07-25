@@ -27,7 +27,7 @@ read -r -p "请输入 appKey: " APP_KEY
 read -r -p "请输入 appSecret: " APP_SECRET
 read -r -p "请输入默认群聊: " GROUP_CODE
 read -r -p "请输入默认刷屏间隔: " SPAM_INTERVAL
-
+read -r -p "请输入默认代理群聊: " IMAGE_GROUP_CODE
 cat > "$PROJECT_DIR/config.json" << EOF
 {
     "APP_KEY": "$APP_KEY",
@@ -36,7 +36,8 @@ cat > "$PROJECT_DIR/config.json" << EOF
     "WS_URL": "wss://bot-wss.yuanbao.tencent.com/wss/connection",
     "DEFAULT_GROUP_CODE": "$GROUP_CODE",
     "SPAM_INTERVAL": $SPAM_INTERVAL,
-    "AUTO_DEFAULT_TEXT": "啊对对对，你说的都对"
+    "AUTO_DEFAULT_TEXT": "啊对对对，你说的都对",
+    "IMAGE_GROUP_CODE": "$IMAGE_GROUP_CODE"
 }
 EOF
 

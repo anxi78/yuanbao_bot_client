@@ -7,6 +7,7 @@
 | 文件 | 说明 |
 |------|------|
 | `sender.py` | 核心交互式发送器，含 `SpamSender` 类、Protobuf 编解码、消息发送/刷屏/自动回复/代理转发 |
+| `group_monitor.py` | 群消息监听器，监听指定群消息并入库 SQLite，支持撤回检测、自动补发被撤回的图片/贴纸/文件/视频 |
 | `config.example.json` | 配置文件示例，设置 Bot 凭证（APP_KEY / APP_SECRET）等参数 |
 | `config.json` | 实际配置文件 |
 | `requirements.txt` | Python 依赖清单 |
