@@ -5,6 +5,10 @@ config.json
 # 终端残留日志
 root
 
+# 数据库和日志（运行时产生，不提交）
+*.db
+*.log
+
 # Python
 __pycache__/
 venv/
