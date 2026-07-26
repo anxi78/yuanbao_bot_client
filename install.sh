@@ -24,7 +24,18 @@ if [ ! -d "$PROJECT_DIR" ]; then
     git clone https://github.com/anxi78/yuanbao_bot_client.git "$PROJECT_DIR"
     echo "✅ 仓库克隆完成"
 else
-    echo "✅ 仓库已存在，跳过克隆"
+    echo "📂 仓库已存在，检查是否最新..."
+    cd "$PROJECT_DIR" || exit
+    git fetch origin
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse origin/main 2>/dev/null || git rev-parse origin/master)
+    if [ "$LOCAL" = "$REMOTE" ]; then
+        echo "✅ 本地仓库已是最新，无需更新"
+    else
+        echo "⚠️ 检测到本地与云端有差异，正在更新..."
+        git pull
+        echo "✅ 更新完成"
+    fi
 fi
 
 # 2. 生成 config.json
@@ -58,11 +69,19 @@ cat > "$BIN_DIR/ybbot" << 'SCRIPT'
 #!/usr/bin/env bash
 set -e
 PROJECT="$HOME/yuanbao_bot_client"
-SCRIPT_PY="sender.py"
 cd "$PROJECT" || exit 1
-exec python "$SCRIPT_PY"
+
+case "${1:-}" in
+    monitor)
+        exec python group_monitor.py
+        ;;
+    *)
+        exec python sender.py
+        ;;
+esac
 SCRIPT
 
 chmod +x "$BIN_DIR/ybbot"
 
 echo "✅ ybbot 已安装：$BIN_DIR/ybbot"
+echo "ybbot monitor命令可以启动撤回通知"
