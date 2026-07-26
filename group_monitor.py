@@ -786,8 +786,9 @@ class MonitorClient:
                             print(f"  └─ ❌ 文件重新发送失败，回退到文字通知")
 
                 # 文字通知（默认/回退）
-                # 在每个 $ 后面加一个空格再发到群（避免 LaTeX 渲染）
-                display_content = f"`{orig_content}`"
+                # 转义反斜杠（避免 LaTeX 命令被渲染，\\ 显示为原始 \）
+                # 再转义 $（避免 LaTeX 数学模式，\$ 显示为原始 $）
+                display_content = orig_content.replace("\\", "\\\\").replace("$", "\\$")
                 notif += f"\n原内容: {display_content}"
                 ok = await self.send_group_message(group_code, notif)
                 if ok:

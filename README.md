@@ -14,6 +14,16 @@
 
 ## 安装
 
+### Termux 用户（一键安装）
+
+```bash
+curl -sSL https://raw.githubusercontent.com/anxi78/yuanbao_bot_client/main/install.sh | bash
+```
+
+安装后输入 `ybbot` 即可启动。
+
+### 手动安装
+
 ```bash
 git clone https://github.com/anxi78/yuanbao_bot_client.git
 cd yuanbao_bot_client

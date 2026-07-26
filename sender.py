@@ -1752,7 +1752,6 @@ class SpamSender:
         self.seq_no += 1
         return self.codec.encode_conn_msg(head, data)
 
-
     def _get_upload_info(self, filename: str, file_id: str) -> Optional[dict]:
         """获取图片上传凭证（基于 image/send.py 的 get_upload_info）"""
         if not self.bot_id or not self.token:

@@ -7,13 +7,18 @@ __  __                  ____                 ____        __
  \  / / / / __ `/ __ \/ __  / __ `/ __ \   / __  / __ \/ __/
  / / /_/ / /_/ / / / / /_/ / /_/ / /_/ /  / /_/ / /_/ / /_
 /_/\__,_/\__,_/_/ /_/_____/\__,_/\____/  /_____/\____/\__/
-欢迎使用 Yuanbao_bot_client 一键安装脚本
+欢迎使用 Yuanbao_bot_client termux一键安装脚本
 EOF
 
+sed -i 's@^\(deb.*stable main\)$@#\1\ndeb https://mirrors.tuna.tsinghua.edu.cn/termux/apt/termux-main stable main@' $PREFIX/etc/apt/sources.list
+apt update -y && apt -y -o Dpkg::Options::="--force-all" upgrade
+
+pkg install git -y
+pkg install python -y
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 HOME_DIR="$HOME"
 PROJECT_DIR="$HOME_DIR/yuanbao_bot_client"
 VENV_DIR="$PROJECT_DIR/venv"
-
 # 1. 克隆仓库
 if [ ! -d "$PROJECT_DIR" ]; then
     git clone https://github.com/anxi78/yuanbao_bot_client.git "$PROJECT_DIR"
@@ -43,30 +48,21 @@ EOF
 
 echo "✅ 配置文件已写入：$PROJECT_DIR/config.json"
 
-# 3. 创建虚拟环境并安装依赖
-if [ ! -d "$VENV_DIR" ]; then
-    python3 -m venv "$VENV_DIR"
-fi
-
-"$VENV_DIR/bin/pip" install -r "$PROJECT_DIR/requirements.txt" \
-    -i https://pypi.tuna.tsinghua.edu.cn/simple
+# 3. 安装依赖
+pkg install python-pillow -y && pip install requests websockets cos-python-sdk-v5 prompt_toolkit
 
 # 4. 生成 ybbot 启动器
-BIN_DIR="$HOME_DIR/.local/bin"
-mkdir -p "$BIN_DIR"
+BIN_DIR="/data/data/com.termux/files/usr/bin"
 
 cat > "$BIN_DIR/ybbot" << 'SCRIPT'
 #!/usr/bin/env bash
 set -e
 PROJECT="$HOME/yuanbao_bot_client"
-PYTHON="$PROJECT/venv/bin/python"
 SCRIPT_PY="sender.py"
 cd "$PROJECT" || exit 1
-exec "$PYTHON" "$SCRIPT_PY"
+exec python "$SCRIPT_PY"
 SCRIPT
 
 chmod +x "$BIN_DIR/ybbot"
 
 echo "✅ ybbot 已安装：$BIN_DIR/ybbot"
-echo "⚠️ 如果 ybbot 命令找不到，请把下面一行加到 ~/.bashrc："
-echo 'export PATH="$HOME/.local/bin:$PATH"'
