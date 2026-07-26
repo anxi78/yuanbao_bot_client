@@ -21,20 +21,49 @@ PROJECT_DIR="$HOME_DIR/yuanbao_bot_client"
 VENV_DIR="$PROJECT_DIR/venv"
 # 1. 克隆仓库
 if [ ! -d "$PROJECT_DIR" ]; then
+    # 目录不存在，直接克隆
     git clone https://github.com/anxi78/yuanbao_bot_client.git "$PROJECT_DIR"
     echo "✅ 仓库克隆完成"
+
 else
-    echo "📂 仓库已存在，检查是否最新..."
-    cd "$PROJECT_DIR" || exit
-    git fetch origin
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse origin/main 2>/dev/null || git rev-parse origin/master)
-    if [ "$LOCAL" = "$REMOTE" ]; then
-        echo "✅ 本地仓库已是最新，无需更新"
+    echo "📂 目录 '$PROJECT_DIR' 已存在，正在进行安全检查..."
+
+    # 1. 检查是否为 Git 仓库
+    if git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        
+        # 2. 检查远程地址是否匹配（兼容 https 和 git@ssh 两种协议）
+        REMOTE_URL=$(git -C "$PROJECT_DIR" config --get remote.origin.url 2>/dev/null)
+        if echo "$REMOTE_URL" | grep -q "anxi78/yuanbao_bot_client"; then
+            
+            # 3. 确认是咱们自己的仓库，开始检查更新
+            echo "✅ 确认为本项目仓库，检查是否最新..."
+            git -C "$PROJECT_DIR" fetch origin
+            
+            LOCAL=$(git -C "$PROJECT_DIR" rev-parse HEAD)
+            REMOTE=$(git -C "$PROJECT_DIR" rev-parse origin/main 2>/dev/null || git -C "$PROJECT_DIR" rev-parse origin/master 2>/dev/null)
+            
+            if [ "$LOCAL" = "$REMOTE" ]; then
+                echo "✅ 本地仓库已是最新，无需更新"
+            else
+                echo "⚠️ 检测到本地与云端有差异，正在更新..."
+                git -C "$PROJECT_DIR" pull
+                echo "✅ 更新完成"
+            fi
+
+        else
+            # 是别人的 Git 仓库
+            echo "❌ 该目录是一个 Git 仓库，但不属于本项目！"
+            echo "   （当前远程地址: $REMOTE_URL）"
+            echo "💡 请手动移除或重命名 '$PROJECT_DIR' 后重试"
+            exit 1
+        fi
+
     else
-        echo "⚠️ 检测到本地与云端有差异，正在更新..."
-        git pull
-        echo "✅ 更新完成"
+        # 不是 Git 仓库（比如你测试时手动建的空文件夹）
+        echo "❌ 目录已存在，但不是 Git 仓库"
+        echo "💡 为防止误删你的文件，请手动检查："
+        ls -la "$PROJECT_DIR"
+        exit 1
     fi
 fi
 
