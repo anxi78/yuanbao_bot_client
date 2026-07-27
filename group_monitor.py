@@ -788,7 +788,17 @@ class MonitorClient:
                 # 文字通知（默认/回退）
                 # 转义特殊字符，避免被 LaTeX/Markdown/HTML 渲染
                 # display_content = orig_content.replace("\\", "\\\\").replace("&", "\\&").replace("$", "\\$").replace("<", "\\<").replace(">", "\\>").replace("[", "\\[").replace("]", "\\]").replace("#", "\\#").replace("`", "\\`")
-                notif += f"\n原内容:\n```原内容\n{orig_content}\n```"
+                # 计算 fence 长度，避免原内容中的反引号提前关掉代码块
+                max_backticks = 0
+                bcount = 0
+                for ch in orig_content:
+                    if ch == '`':
+                        bcount += 1
+                        max_backticks = max(max_backticks, bcount)
+                    else:
+                        bcount = 0
+                fence = '`' * (max_backticks + 1) if max_backticks >= 3 else '```'
+                notif += f"\n原内容:\n{fence}原内容\n{orig_content}\n{fence}"
                 ok = await self.send_group_message(group_code, notif)
                 if ok:
                     print(f"  └─ ✅ 已发送撤回通知到群")
