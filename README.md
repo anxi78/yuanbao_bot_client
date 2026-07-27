@@ -179,12 +179,11 @@ python sender.py
 
 原内容通过 Markdown 代码块包裹发送，防止 LaTeX / Markdown / HTML 渲染。
 
-```
+````
 原内容:
 ```原内容
 [测试链接](url) &copy; <sub>下标</sub>
-```
-```
+````
 
 **防渲染原理**：Markdown 代码块的 fence（围栏）用反引号 ` ``` ` 包裹，只要外层 fence 比内层长，内层的反引号就不会被识别为结束标记。
 
