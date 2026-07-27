@@ -171,6 +171,43 @@ python sender.py
 - 自定义 Protobuf 编解码（微信 iLink 协议层）
 - COS（腾讯云对象存储）文件上传
 
+## 撤回通知（group_monitor.py）
+
+群消息监听器会自动检测群内撤回事件，向目标群发送撤回通知。通知包含撤回者、原发送者、发送时间和原内容。
+
+### 原内容防渲染
+
+原内容通过 Markdown 代码块包裹发送，防止 LaTeX / Markdown / HTML 渲染。
+
+```
+原内容:
+```原内容
+[测试链接](url) &copy; <sub>下标</sub>
+```
+```
+
+**防渲染原理**：Markdown 代码块的 fence（围栏）用反引号 ` ``` ` 包裹，只要外层 fence 比内层长，内层的反引号就不会被识别为结束标记。
+
+```markdown
+````          ← 4个反引号 (外层)
+```           ← 3个反引号 (内层，原内容中的)
+````          ← 4个反引号 (外层，结束)
+```
+
+代码实现：扫描原内容中最长的连续反引号长度 `N`，外层 fence 使用 `N+1` 个反引号；若原内容无反引号则默认使用 3 个。
+
+```python
+max_backticks = 0
+bcount = 0
+for ch in orig_content:
+    if ch == '`':
+        bcount += 1
+        max_backticks = max(max_backticks, bcount)
+    else:
+        bcount = 0
+fence = '`' * (max_backticks + 1) if max_backticks >= 3 else '```'
+```
+
 ## 许可证
 
 MIT
