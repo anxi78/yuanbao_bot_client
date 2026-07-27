@@ -786,18 +786,8 @@ class MonitorClient:
                             print(f"  └─ ❌ 文件重新发送失败，回退到文字通知")
 
                 # 文字通知（默认/回退）
-                # 转义反斜杠（避免 LaTeX 命令被渲染，\\ 显示为原始 \）
-                # 再转义 $（避免 LaTeX 数学模式，\$ 显示为原始 $）
-                # [] 不转义为 \[ \]（会触发 LaTeX 数学模式），改用零宽空格插入打断 Markdown 链接语法
-                display_content = (
-                    orig_content
-                    .replace("\\", "\\\\")
-                    .replace("$", "\\$")
-                    .replace("<", "\\<")
-                    .replace(">", "\\>")
-                    .replace("[", "[\u200b")
-                    .replace("]", "\u200b]")
-                )
+                # 转义特殊字符，避免被 LaTeX/Markdown/HTML 渲染
+                display_content = orig_content.replace("\\", "\\\\").replace("$", "\\$").replace("<", "\\<").replace(">", "\\>").replace("[", "\\[").replace("]", "\\]")
                 notif += f"\n原内容: {display_content}"
                 ok = await self.send_group_message(group_code, notif)
                 if ok:
