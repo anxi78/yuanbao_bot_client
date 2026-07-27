@@ -597,7 +597,7 @@ BIZ_CMD_GET_MEMBERS = "get_group_member_list"
 BIZ_CMD_QUERY_GROUP_INFO = "query_group_info"
 BIZ_CMD_SYNC_INFORMATION = "sync_information"
 
-__version__ = "1.1.0"
+__version__ = "1.5"
 
 
 class SimpleProtobufCodec:
