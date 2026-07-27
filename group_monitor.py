@@ -787,7 +787,7 @@ class MonitorClient:
 
                 # 文字通知（默认/回退）
                 # 转义特殊字符，避免被 LaTeX/Markdown/HTML 渲染
-                display_content = orig_content.replace("\\", "\\\\").replace("$", "\\$").replace("<", "\\<").replace(">", "\\>").replace("[", "\\[").replace("]", "\\]")
+                display_content = orig_content.replace("\\", "\\\\").replace("$", "\\$").replace("<", "\\<").replace(">", "\\>").replace("[", "\\[").replace("]", "\\]").replace("#", "\\#").replace("`", "\\`")
                 notif += f"\n原内容: {display_content}"
                 ok = await self.send_group_message(group_code, notif)
                 if ok:
