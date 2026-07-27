@@ -788,7 +788,16 @@ class MonitorClient:
                 # 文字通知（默认/回退）
                 # 转义反斜杠（避免 LaTeX 命令被渲染，\\ 显示为原始 \）
                 # 再转义 $（避免 LaTeX 数学模式，\$ 显示为原始 $）
-                display_content = orig_content.replace("\\", "\\\\").replace("$", "\\$").replace("<", "\\<").replace(">", "\\>").replace("[", "\\[").replace("]", "\\]")
+                # [] 不转义为 \[ \]（会触发 LaTeX 数学模式），改用零宽空格插入打断 Markdown 链接语法
+                display_content = (
+                    orig_content
+                    .replace("\\", "\\\\")
+                    .replace("$", "\\$")
+                    .replace("<", "\\<")
+                    .replace(">", "\\>")
+                    .replace("[", "[\u200b")
+                    .replace("]", "\u200b]")
+                )
                 notif += f"\n原内容: {display_content}"
                 ok = await self.send_group_message(group_code, notif)
                 if ok:
