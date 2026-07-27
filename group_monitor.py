@@ -788,7 +788,7 @@ class MonitorClient:
                 # 文字通知（默认/回退）
                 # 转义反斜杠（避免 LaTeX 命令被渲染，\\ 显示为原始 \）
                 # 再转义 $（避免 LaTeX 数学模式，\$ 显示为原始 $）
-                display_content = orig_content.replace("\\", "\\\\").replace("$", "\\$").replace("<", "\\<").replace(">", "\\>")
+                display_content = orig_content.replace("\\", "\\\\").replace("$", "\\$").replace("<", "\\<").replace(">", "\\>").replace("[", "\\[").replace("]", "\\]")
                 notif += f"\n原内容: {display_content}"
                 ok = await self.send_group_message(group_code, notif)
                 if ok:
