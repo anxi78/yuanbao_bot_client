@@ -1,7 +1,6 @@
 # 元宝 Bot 客户端
 
 腾讯元宝 Bot 的纯 Python WebSocket 客户端，基于 OpenClaw 插件协议，支持消息发送、群管理、自动回复、AI 图片生成等功能。
-
 ## 项目结构
 
 | 文件 | 说明 |
@@ -206,7 +205,10 @@ for ch in orig_content:
         bcount = 0
 fence = '`' * (max_backticks + 1) if max_backticks >= 3 else '```'
 ```
+##交流群
 
+元宝派：780-533-671
+点击链接加入元宝派：https://yb.tencent.com/gp/i/iHwKUladPJCi
 ## 许可证
 
 MIT
