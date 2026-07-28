@@ -207,7 +207,8 @@ fence = '`' * (max_backticks + 1) if max_backticks >= 3 else '```'
 ```
 ## 交流群
 
-元宝派：780-533-671\n
+元宝派：780-533-671
+
 点击链接加入元宝派：https://yb.tencent.com/gp/i/iHwKUladPJCi
 ## 许可证
 
