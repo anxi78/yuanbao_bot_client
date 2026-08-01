@@ -22,6 +22,7 @@ from prompt_toolkit.auto_suggest import AutoSuggest, Suggestion, AutoSuggestFrom
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.patch_stdout import patch_stdout
+from plugin_loader import PluginManager
 
 # ── 日志配置：debug 信息写入 bot.log，不输出到控制台 ──
 logger = logging.getLogger("yuanbao_bot")
@@ -2911,7 +2912,7 @@ def print_banner():
     print()
 
 
-def print_help():
+def print_help(plugin_cmds: Optional[list] = None):
     print("\033[92m命令列表:")
     print("  <文字>            - 发送普通消息")
     print("  /at 用户ID 内容   - 艾特指定用户发送")
@@ -2960,6 +2961,12 @@ def print_help():
     print("  /echo <路径>       - /send 的别名，同上")
     print("  /help             - 显示帮助")
     print("  /exit             - 退出")
+    # ── 插件命令（由 plugins/ 目录下的插件动态注册） ──
+    if plugin_cmds:
+        print()
+        print("\033[93m插件命令:")
+        for cmd, desc in plugin_cmds:
+            print(f"  {cmd} {('- ' + desc) if desc else ''}")
     print()
 
 
@@ -2988,8 +2995,20 @@ async def interactive_mode():
     # 刷屏间隔（秒）
     spam_interval = SPAM_INTERVAL
 
+    # ── 插件系统：加载 plugins/ 目录下的插件 ──
+    def _register_plugin_command(cmd: str, description: str) -> None:
+        """插件注册命令时，同步更新自动补全列表和命令描述。"""
+        if cmd and cmd not in COMMANDS:
+            COMMANDS.append(cmd)
+            COMMANDS.sort(key=len, reverse=True)
+        if description:
+            COMMAND_DESCRIPTIONS[cmd] = description
+
+    plugin_manager = PluginManager(sender, on_command_registered=_register_plugin_command)
+    plugin_manager.load_all()
+
     print("\n" + "-" * 56)
-    print_help()
+    print_help(plugin_cmds=plugin_manager.command_help_items())
 
     asyncio.create_task(sender._receive_loop())
 
@@ -3073,6 +3092,9 @@ async def interactive_mode():
 
     sender.on_push_message = _auto_ok_callback
 
+    # 包装推送回调：既保留原有自动回复逻辑，又分发给插件注册的消息监听器
+    sender.on_push_message = plugin_manager.hook_push_message(sender.on_push_message)
+
     while True:
         # 如果连接断开且不在重连中，提示用户
         if not sender.connected:
@@ -3094,7 +3116,7 @@ async def interactive_mode():
 
             # 帮助
             if raw == "/help":
-                print_help()
+                print_help(plugin_cmds=plugin_manager.command_help_items())
                 continue
 
             # ===== /groupinfo 查询群信息 =====
@@ -4104,6 +4126,10 @@ async def interactive_mode():
                     print(f"文件内容已发送")
                 else:
                     print("发送失败")
+                continue
+
+            # ── 插件命令分发（未命中内置命令时，交给插件处理） ──
+            if await plugin_manager.dispatch(raw):
                 continue
 
             # 普通消息
