@@ -22,7 +22,7 @@ VENV_DIR="$PROJECT_DIR/venv"
 # 1. 克隆仓库
 if [ ! -d "$PROJECT_DIR" ]; then
     # 目录不存在，直接克隆
-    git clone https://github.com/anxi78/yuanbao_bot_client.git "$PROJECT_DIR"
+    git clone https://v4.gh-proxy.org/github.com/anxi78/yuanbao_bot_client.git "$PROJECT_DIR"
     echo "✅ 仓库克隆完成"
 
 else
