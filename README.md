@@ -209,6 +209,6 @@ fence = '`' * (max_backticks + 1) if max_backticks >= 3 else '```'
 
 GPLv3（GNU General Public License v3.0）
 
-本项目派生自 [yuanbao-openclaw-plugin](https://github.com/Tencent/...)
+本项目派生自 [yuanbao-openclaw-plugin](https://github.com/Tencent/yuanbao-openclaw-plugin)
 （MIT 许可，版权归 Tencent），原 MIT 版权声明保留在 [LICENSE](LICENSE) 中；
 本项目的修改与新增部分以 GPLv3 授权。
