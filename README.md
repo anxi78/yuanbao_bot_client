@@ -1,7 +1,40 @@
-# 元宝 Bot 客户端
+<p align="center">
+  <img src="https://img.shields.io/badge/🤖-元宝%20Bot%20客户端-0052D9?style=for-the-badge" alt="Yuanbao Bot Client">
+</p>
 
-腾讯元宝 Bot 的纯 Python WebSocket 客户端，基于 OpenClaw 插件协议，支持消息发送、群管理、自动回复、AI 图片生成等功能。
-## 项目结构
+<h1 align="center">🤖 元宝 Bot 客户端</h1>
+
+<p align="center">
+  <b>腾讯元宝 Bot 的纯 Python WebSocket 客户端，基于 OpenClaw 插件协议，支持消息发送、群管理、自动回复、AI 图片生成等功能</b>
+</p>
+
+<p align="center">
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-≥3.10-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
+  <a href="https://github.com/anxi78/yuanbao_bot_client"><img src="https://img.shields.io/badge/License-GPL--3.0-brightgreen?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/badge/Bot%20Protocol-OpenClaw-0078d4?style=flat-square" alt="Protocol">
+</p>
+
+<p align="center">
+  <a href="https://github.com/anxi78/yuanbao_bot_client"><img src="https://img.shields.io/badge/上游项目-anxi78/yuanbao__bot__client-181717?style=flat-square&logo=github" alt="Upstream"></a>
+  <a href="https://yuanbao.tencent.com/"><img src="https://img.shields.io/badge/Platform-腾讯元宝-0052D9?style=flat-square" alt="Platform"></a>
+  <a href="https://termux.com/"><img src="https://img.shields.io/badge/Platform-Termux-005A31?style=flat-square&logo=android" alt="Termux"></a>
+</p>
+
+---
+
+## 📖 项目简介
+
+> **元宝 Bot 客户端** 是一个纯 Python 编写的腾讯元宝 Bot WebSocket 客户端，基于 OpenClaw 插件协议，提供消息收发、群管理、自动回复、AI 图片生成等能力，并内置交互式发送器（`sender.py`）与群消息监听器（`group_monitor.py`）。
+
+### 🔗 版权声明
+
+本项目派生自 [yuanbao-openclaw-plugin](https://github.com/Tencent/yuanbao-openclaw-plugin)（**MIT** 许可，版权归 Tencent），原 MIT 版权声明保留在 [LICENSE](LICENSE) 中；本项目的修改与新增部分以 **GPLv3** 授权。
+
+> 💡 若你是在 Termux（Android）上使用，推荐直接走下方「一键安装」，装完输入 `ybbot` 即可启动。
+
+---
+
+## 🏗️ 项目结构
 
 | 文件 | 说明 |
 |------|------|
@@ -11,9 +44,11 @@
 | `config.json` | 实际配置文件 |
 | `requirements.txt` | Python 依赖清单 |
 
-## 安装
+---
 
-### Termux 用户（一键安装）
+## 🚀 快速开始
+
+### 1️⃣ Termux 用户（一键安装）
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/anxi78/yuanbao_bot_client/main/install.sh | bash
@@ -21,7 +56,7 @@ curl -sSL https://raw.githubusercontent.com/anxi78/yuanbao_bot_client/main/insta
 
 安装后输入 `ybbot` 即可启动。
 
-### 手动安装
+### 2️⃣ 手动安装
 
 ```bash
 git clone https://github.com/anxi78/yuanbao_bot_client.git
@@ -29,7 +64,7 @@ cd yuanbao_bot_client
 pip install -r requirements.txt
 ```
 
-## 配置
+### 3️⃣ 配置
 
 编辑 `config.json`，填写 Bot 凭证（APP_KEY 和 APP_SECRET），可在元宝 Bot 管理后台获取。
 
@@ -45,7 +80,7 @@ pip install -r requirements.txt
 }
 ```
 
-## 使用
+### 4️⃣ 启动
 
 ```bash
 python sender.py
@@ -53,7 +88,11 @@ python sender.py
 
 连接后进入交互模式，在 `yuanbao>` 提示符下输入命令。
 
-### 消息发送
+---
+
+## 💬 命令指南
+
+### 📨 消息发送
 
 | 命令 | 功能 |
 |------|------|
@@ -70,7 +109,7 @@ python sender.py
 | `/big <内容> <字号>` | 发送放大 LaTeX 文本 |
 | `/paste` | 多行粘贴模式，输入 `/end` 发送，`/cancel` 取消 |
 
-### 刷屏
+### 🔁 刷屏
 
 | 命令 | 功能 |
 |------|------|
@@ -82,9 +121,9 @@ python sender.py
 | `/dmspam <用户ID> <内容> <次数>` | 私聊刷屏 |
 | `/interval <秒数>` | 设置刷屏间隔（默认 1.0 秒） |
 
-**刷屏过程中可按 Ctrl+C 或 ESC 随时中断。**
+> ⚠️ **刷屏过程中可按 `Ctrl+C` 或 `ESC` 随时中断。**
 
-### 批量艾特
+### 📢 批量艾特
 
 | 命令 | 功能 |
 |------|------|
@@ -94,7 +133,7 @@ python sender.py
 | `/atbot <内容>` | 艾特所有 Bot 成员 |
 | `/multiat <ID1,ID2,...> <内容>` | 批量艾特指定用户（逗号分隔） |
 
-### 群管理
+### 🛠️ 群管理
 
 | 命令 | 功能 |
 |------|------|
@@ -106,7 +145,7 @@ python sender.py
 | `/members echo bot` | 仅发送 Bot 成员到群 |
 | `/myid <昵称>` | 在成员列表中搜索自己的用户 ID |
 
-### 用户数据库
+### 👥 用户数据库
 
 | 命令 | 功能 |
 |------|------|
@@ -114,7 +153,7 @@ python sender.py
 | `/adduser <用户ID> <昵称>` | 手动添加常用用户 |
 | `/deluser <用户ID>` | 删除用户 |
 
-### 贴纸
+### 🎨 贴纸
 
 | 命令 | 功能 |
 |------|------|
@@ -123,7 +162,7 @@ python sender.py
 
 内置贴纸包含：六六六、我想开了、害羞、比心、委屈、亲亲、酷、斜眼笑、吃瓜、狗头、爱心、晚安、点赞、玫瑰、牛吖、略略略、我酸了、尊嘟假嘟 等 60+ 个。
 
-### 自动回复 / 代理模式
+### 🤖 自动回复 / 代理模式
 
 | 命令 | 功能 |
 |------|------|
@@ -133,9 +172,9 @@ python sender.py
 | `/auto yb on` | 开启代理模式：将消息转发到元宝群，将元宝回复回传（需配置 `IMAGE_GROUP_CODE`） |
 | `/auto off` | 关闭自动回复 |
 
-**代理模式** (`/auto yb on`)：将群内所有消息转发给「元宝」Bot，自动将元宝的回复引用回原消息。支持 FIFO 队列排队处理。
+> 💡 **代理模式** (`/auto yb on`)：将群内所有消息转发给「元宝」Bot，自动将元宝的回复引用回原消息。支持 FIFO 队列排队处理。
 
-### 其他
+### ⌨️ 其他
 
 | 命令 | 功能 |
 |------|------|
@@ -146,7 +185,7 @@ python sender.py
 | `/help` | 显示帮助 |
 | `/exit` | 退出 |
 
-### 快捷键
+### 🔑 快捷键
 
 | 快捷键 | 功能 |
 |--------|------|
@@ -154,23 +193,29 @@ python sender.py
 | `Ctrl+D` | 丢弃当前行输入，换到下一行 |
 | `Ctrl+C` / `ESC` | 停止刷屏 / 中断操作 |
 
-## 核心特性
+---
 
-- **自动重连**：WebSocket 断开后自动尝试重连（1s/2s/4s/8s/16s 退避），重建连接后恢复心跳和接收循环
-- **ESC 中断**：刷屏操作中可按 ESC 随时停止，无需关闭终端
-- **昵称反向查询**：`/at` 支持输入昵称自动匹配用户 ID（支持模糊匹配）
-- **引用消息**：通过 `/recent` 获取消息列表，使用序号引用回复
-- **贴纸 + 艾特 + 文字**：单条消息组合发送贴纸、艾特和文字
-- **COS 上传**：图片/文件自动通过腾讯云 COS 上传获取直链
-- **群成员缓存**：获取成员列表时自动缓存昵称，后续命令可直接使用昵称
+## ✨ 核心特性
 
-## 协议
+- **自动重连** — WebSocket 断开后自动尝试重连（1s/2s/4s/8s/16s 退避），重建连接后恢复心跳和接收循环
+- **ESC 中断** — 刷屏操作中可按 ESC 随时停止，无需关闭终端
+- **昵称反向查询** — `/at` 支持输入昵称自动匹配用户 ID（支持模糊匹配）
+- **引用消息** — 通过 `/recent` 获取消息列表，使用序号引用回复
+- **贴纸 + 艾特 + 文字** — 单条消息组合发送贴纸、艾特和文字
+- **COS 上传** — 图片/文件自动通过腾讯云 COS 上传获取直链
+- **群成员缓存** — 获取成员列表时自动缓存昵称，后续命令可直接使用昵称
+
+---
+
+## 🔧 协议
 
 - 基于 HMAC-SHA256 签名认证
 - 自定义 Protobuf 编解码（微信 iLink 协议层）
 - COS（腾讯云对象存储）文件上传
 
-## 撤回通知（group_monitor.py）
+---
+
+## 📋 撤回通知（group_monitor.py）
 
 群消息监听器会自动检测群内撤回事件，向目标群发送撤回通知。通知包含撤回者、原发送者、发送时间和原内容。
 
@@ -205,10 +250,25 @@ for ch in orig_content:
         bcount = 0
 fence = '`' * (max_backticks + 1) if max_backticks >= 3 else '```'
 ```
-## 许可证
+---
 
-GPLv3（GNU General Public License v3.0）
+## 📄 开源协议
 
-本项目派生自 [yuanbao-openclaw-plugin](https://github.com/Tencent/yuanbao-openclaw-plugin)
-（MIT 许可，版权归 Tencent），原 MIT 版权声明保留在 [LICENSE](LICENSE) 中；
-本项目的修改与新增部分以 GPLv3 授权。
+本项目以 **GPLv3（GNU General Public License v3.0）** 协议开源。
+
+- 上游项目：[yuanbao-openclaw-plugin](https://github.com/Tencent/yuanbao-openclaw-plugin)
+- 上游协议：MIT（版权归 Tencent，原 MIT 版权声明保留在 [LICENSE](LICENSE) 中）
+- 本项目修改与新增部分：GPLv3
+
+---
+
+<p align="center">
+  <b>🤖 元宝 Bot 客户端 · 让元宝 Bot 触手可及</b>
+</p>
+
+<p align="center">
+  <a href="https://github.com/anxi78/yuanbao_bot_client">上游项目</a> ·
+  <a href="#-快速开始">快速开始</a> ·
+  <a href="#-命令指南">命令指南</a> ·
+  <a href="#-开源协议">开源协议</a>
+</p>
