@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-≥3.10-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
-  <a href="https://github.com/anxi78/yuanbao_bot_client"><img src="https://img.shields.io/badge/License-GPL--3.0-brightgreen?style=flat-square" alt="License"></a>
+  <a href="https://github.com/anxi78/yuanbao_bot_client/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-brightgreen?style=flat-square" alt="License"></a>
   <img src="https://img.shields.io/badge/Bot%20Protocol-OpenClaw-0078d4?style=flat-square" alt="Protocol">
 </p>
 
