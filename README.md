@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/anxi78/yuanbao_bot_client"><img src="https://img.shields.io/badge/上游项目-anxi78/yuanbao__bot__client-181717?style=flat-square&logo=github" alt="Upstream"></a>
+  <a href="https://github.com/Tencent/yuanbao-openclaw-plugin"><img src="https://img.shields.io/badge/上游项目-Tencent%2Fyuanbao__openclaw__plugin-181717?style=flat-square&logo=github" alt="Upstream"></a>
   <a href="https://yuanbao.tencent.com/"><img src="https://img.shields.io/badge/Platform-腾讯元宝-0052D9?style=flat-square" alt="Platform"></a>
   <a href="https://termux.com/"><img src="https://img.shields.io/badge/Platform-Termux-005A31?style=flat-square&logo=android" alt="Termux"></a>
 </p>
