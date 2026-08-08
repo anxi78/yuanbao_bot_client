@@ -17,7 +17,7 @@
 <p align="center">
   <a href="https://github.com/Tencent/yuanbao-openclaw-plugin"><img src="https://img.shields.io/badge/上游项目-Tencent%2Fyuanbao__openclaw__plugin-181717?style=flat-square&logo=github" alt="Upstream"></a>
   <a href="https://yuanbao.tencent.com/"><img src="https://img.shields.io/badge/Platform-腾讯元宝-0052D9?style=flat-square" alt="Platform"></a>
-  <a href="https://termux.dev/"><img src="https://img.shields.io/badge/Platform-Termux-005A31?style=flat-square&logo=android" alt="Termux"></a>
+  <a href="https://github.com/termux/termux-app"><img src="https://img.shields.io/badge/Platform-Termux-005A31?style=flat-square&logo=android" alt="Termux"></a>
 </p>
 
 ---
