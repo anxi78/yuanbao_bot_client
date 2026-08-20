@@ -15,3 +15,9 @@ venv/
 bot.log
 downloads/
 yuanbao-openclaw-plugin/
+
+# WebUI 插件（不提交）
+plugins/webui/
+
+# 词库参考源文件（仅作编写教程的参考，不提交）
+8754979.txt
