@@ -6,5 +6,6 @@
     "DEFAULT_GROUP_CODE": "群号",
     "SPAM_INTERVAL": 1.0,
     "AUTO_DEFAULT_TEXT": "啊对对对，你说的都对",
-    "IMAGE_GROUP_CODE": "图片生成群号（ai-image命令用）"
+    "IMAGE_GROUP_CODE": "图片生成群号（ai-image命令用）",
+    "LEXICON_ENABLED": true
 }

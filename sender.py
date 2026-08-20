@@ -23,6 +23,7 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.patch_stdout import patch_stdout
 from plugin_loader import PluginManager
+from lexicon import LexiconEngine
 
 # ── 日志配置：debug 信息写入 bot.log，不输出到控制台 ──
 logger = logging.getLogger("yuanbao_bot")
@@ -45,7 +46,7 @@ COMMANDS = sorted([
     "/sticker", "/stickerlist", "/stickerfind",
     "/dm", "/dmspam", "/members", "/myid", "/recent",
     "/paste", "/big", "/auto", "/reconnect", "/interval",
-    "/auth", "/send", "/echo", "/help", "/exit",
+    "/auth", "/send", "/echo", "/help", "/exit", "/lexicon",
 ], key=len, reverse=True)
 
 # 命令中文描述（用于 SyncInformation 命令同步）
@@ -88,6 +89,7 @@ COMMAND_DESCRIPTIONS: dict[str, str] = {
     "/echo": "/send 的别名，发送文件内容到群聊",
     "/help": "显示帮助",
     "/exit": "退出程序",
+    "/lexicon": "词库系统：查看状态 / 开关 / 重新加载（/lexicon on|off|reload）",
 }
 
 
@@ -1901,6 +1903,27 @@ class SpamSender:
         return encode_conn_msg(CMD_TYPE_REQUEST, BIZ_CMD_SEND_GROUP, seq_no,
                                msg_id, BIZ_MODULE, data)
 
+    def _build_c2c_image_msg(self, images: list, to_account: str) -> bytes:
+        """构建私聊多图消息（SendC2CMessageReq，msgBody 包含多个 TIMImageElem）
+
+        Args:
+            images: 列表，每项为 (url, uuid, size, width, height) 元组
+            to_account: 私聊目标用户 ID
+        """
+        data = b''
+        data += pb_string(1, self._generate_msg_id())                # msg_id
+        data += pb_string(2, to_account)                             # to_account
+        data += pb_string(3, self.bot_id or "")                      # from_account
+        data += pb_uint32(4, random.randint(1, 999999999))           # random
+        for img in images:
+            elem = self._build_image_elem(*img)
+            data += pb_msg(5, elem)                                  # msgBody (repeated)
+        seq_no = self.seq_no
+        self.seq_no += 1
+        msg_id = self._generate_msg_id()
+        return encode_conn_msg(CMD_TYPE_REQUEST, BIZ_CMD_SEND_C2C, seq_no,
+                               msg_id, BIZ_MODULE, data)
+
     def _build_file_msg(self, url: str, uuid: str = "", file_size: int = 0, file_name: str = "", group_code: str = None) -> bytes:
         """构建文件群消息（TIMFileElem 构造）"""
         gc = group_code or self.group_code
@@ -1965,11 +1988,14 @@ class SpamSender:
         )
         return self.codec.encode_conn_msg(head, data)
 
-    async def send_images_multi(self, image_paths: list[str]) -> bool:
-        """发送多张图片到当前群（一次消息包含多图）
-        
+    async def send_images_multi(self, image_paths: list[str], target_group: str = None,
+                                to_account: str = None) -> bool:
+        """发送多张图片（群或私聊，一次消息包含多图）
+
         Args:
             image_paths: 图片路径列表
+            target_group: 目标群号，为空时使用 self.group_code
+            to_account: 私聊目标用户 ID；传此参数即表示走私聊通道
         """
         if not self.connected or not self.ws:
             return False
@@ -2030,7 +2056,10 @@ class SpamSender:
         
         # 一次性发送所有图片（多个 TIMImageElem 合并到一个 msgBody）
         try:
-            msg = self._build_image_msg(images)
+            if to_account:
+                msg = self._build_c2c_image_msg(images, to_account=to_account)
+            else:
+                msg = self._build_image_msg(images, group_code=target_group)
             await self.ws.send(msg)
             count = len(images)
             print(f"已发送 {count} 张图片: {', '.join(os.path.basename(p) for p in image_paths[:count])}")
@@ -2039,8 +2068,44 @@ class SpamSender:
             print(f"发送多图失败: {e}")
             return False
 
-    async def send_file(self, file_path: str) -> bool:
-        """发送文件消息"""
+    async def _download_image_tmp(self, url: str) -> str:
+        """下载网络图片到临时文件，返回本地路径；失败返回空串。"""
+        import tempfile
+        try:
+            loop = asyncio.get_running_loop()
+            resp = await loop.run_in_executor(
+                None,
+                lambda: requests.get(
+                    url, timeout=60, headers={"User-Agent": "Mozilla/5.0"}
+                ),
+            )
+            if resp.status_code == 200 and resp.content:
+                ext = ".png"
+                ct = resp.headers.get("Content-Type", "").lower()
+                if "jpeg" in ct or "jpg" in ct:
+                    ext = ".jpg"
+                elif "gif" in ct:
+                    ext = ".gif"
+                elif "webp" in ct:
+                    ext = ".webp"
+                tmp = tempfile.mkdtemp(prefix="lex_img_")
+                path = os.path.join(tmp, "img" + ext)
+                with open(path, "wb") as f:
+                    f.write(resp.content)
+                return path
+            else:
+                logger.error("词库网络图片下载失败 HTTP %s: %s", resp.status_code, url)
+        except Exception as e:
+            logger.error("词库网络图片下载异常 %s: %s", url, e)
+        return ""
+
+    async def send_file(self, file_path: str, target_group: str = None) -> bool:
+        """发送文件消息
+        
+        Args:
+            file_path: 文件路径
+            target_group: 目标群号，为空时使用 self.group_code
+        """
         if not self.connected or not self.ws:
             return False
         
@@ -2080,7 +2145,7 @@ class SpamSender:
         
         # 发送文件消息
         try:
-            msg = self._build_file_msg(url, file_id, file_size=len(data), file_name=filename)
+            msg = self._build_file_msg(url, file_id, file_size=len(data), file_name=filename, group_code=target_group)
             await self.ws.send(msg)
             print(f"文件已发送: {filename} ({len(data)} bytes)")
             return True
@@ -2096,6 +2161,7 @@ class SpamSender:
         thumb_path: str = "",
         thumb_width: int = 0,
         thumb_height: int = 0,
+        target_group: str = None,
     ) -> bool:
         """发送视频消息（上传到 COS 后发送）
 
@@ -2106,6 +2172,7 @@ class SpamSender:
             thumb_path: 视频封面图片路径，可选
             thumb_width: 封面宽度，可选
             thumb_height: 封面高度，可选
+            target_group: 目标群号，为空时使用 self.group_code
         """
         if not self.connected or not self.ws:
             return False
@@ -2174,6 +2241,7 @@ class SpamSender:
                 uuid=video_id,
                 file_size=len(video_data),
                 file_name=filename,
+                group_code=target_group,
             )
             await self.ws.send(msg)
             print(f"视频已发送: {filename} ({len(video_data)} bytes)")
@@ -2182,13 +2250,14 @@ class SpamSender:
             print(f"发送视频失败: {e}")
             return False
 
-    def _build_multi_at_message(self, text: str, at_users: list) -> bytes:
+    def _build_multi_at_message(self, text: str, at_users: list, group_code: str = None) -> bytes:
         """构建批量艾特的群消息 - 多个 TIMCustomElem(艾特) + TIMTextElem(文本)
         at_users: [(user_id, nickname), ...]
+        group_code: 目标群号，为空时使用 self.group_code
         """
         data = b''
         data += self.codec.encode_string(1, self._generate_msg_id())
-        data += self.codec.encode_string(2, self.group_code)
+        data += self.codec.encode_string(2, group_code or self.group_code)
         data += self.codec.encode_string(3, self.bot_id or "")
         data += self.codec.encode_string(5, str(random.randint(1, 999999999)))
 
@@ -2289,10 +2358,11 @@ class SpamSender:
         except Exception as e:
             return False
 
-    async def send_multi_at_message(self, text: str, at_users: list) -> bool:
+    async def send_multi_at_message(self, text: str, at_users: list, target_group: str = None) -> bool:
         """发送批量艾特消息 — 自动分片，每 20 人一条消息
         每个批次都有文本内容，避免服务端静默丢弃只有 @ 的消息
         at_users: [(user_id, nickname), ...]
+        target_group: 目标群号，为空时使用 self.group_code
         """
         if not self.connected or not self.ws:
             return False
@@ -2303,7 +2373,7 @@ class SpamSender:
                 chunk = at_users[i:i + CHUNK_SIZE]
                 # 第1批带完整文本，后续批次用短占位符防止刷屏
                 batch_text = text if i == 0 else "—"
-                msg = self._build_multi_at_message(batch_text, chunk)
+                msg = self._build_multi_at_message(batch_text, chunk, group_code=target_group)
                 await self.ws.send(msg)
                 if i + CHUNK_SIZE < total:
                     await asyncio.sleep(0.3)
@@ -3007,6 +3077,13 @@ async def interactive_mode():
     plugin_manager = PluginManager(sender, on_command_registered=_register_plugin_command)
     plugin_manager.load_all()
 
+    # ── 词库系统（参照 Secluded 格式）──
+    LEXICON_DIR = os.path.join(os.environ['HOME'], 'yuanbao_bot_client', '词库')
+    lexicon_engine = LexiconEngine(LEXICON_DIR, enabled=app_config.get('LEXICON_ENABLED', True))
+    lexicon_stats = lexicon_engine.load()
+    print(f"词库系统: 已加载 {lexicon_stats['files']} 个文件 / {lexicon_stats['rules']} 条规则"
+          f"（{'启用' if lexicon_engine.enabled else '禁用'}，目录: {LEXICON_DIR}）")
+
     print("\n" + "-" * 56)
     print_help(plugin_cmds=plugin_manager.command_help_items())
 
@@ -3095,6 +3172,81 @@ async def interactive_mode():
     # 包装推送回调：既保留原有自动回复逻辑，又分发给插件注册的消息监听器
     sender.on_push_message = plugin_manager.hook_push_message(sender.on_push_message)
 
+    # ── 词库系统：在原有自动回复/插件之后，追加词库匹配回复 ──
+    async def _handle_lexicon(push_json: dict, cache_entry: dict):
+        if not lexicon_engine.enabled or not lexicon_engine.rules:
+            return
+        # 不回复自己的消息
+        if cache_entry.get("sender_id") == sender.bot_id:
+            return
+        content = cache_entry.get("content", "") or ""
+        content = content.strip()
+        if not content:
+            return
+        ctx = {
+            "QQ": cache_entry.get("sender_id", ""),
+            "群号": cache_entry.get("group_code", "") or "",
+            "昵称": cache_entry.get("sender_name", ""),
+            "Account": sender.bot_id or "",
+        }
+        try:
+            reply = lexicon_engine.match(content, ctx)
+        except Exception as e:
+            logger.error("词库匹配异常: %s", e)
+            return
+        if not reply:
+            return
+        # 统一解析 $访问$ / $图片$ / 变量赋值（变量名:$访问...$），按顺序执行
+        try:
+            text_part, image_specs = await lexicon_engine.resolve(reply, ctx)
+        except Exception as e:
+            logger.error("词库解析失败: %s", e)
+            return
+        group_code = cache_entry.get("group_code", "")
+        sender_id = cache_entry.get("sender_id", "")
+        try:
+            # 1) 文本部分（若有）
+            if text_part and text_part.strip():
+                if group_code:
+                    # 纯群消息：不引用、不 @ 发送者（与 Secluded 词库默认行为一致）
+                    await sender.send_group_message(text_part, target_group=group_code)
+                else:
+                    await sender.send_dm_message(sender_id, text_part)
+            # 2) 图片部分（网络图片下载 / 本地图片校验后发送）
+            if image_specs:
+                local_paths = []
+                for spec in image_specs:
+                    if spec.startswith("http://") or spec.startswith("https://"):
+                        p = await sender._download_image_tmp(spec)
+                        if p:
+                            local_paths.append(p)
+                    else:
+                        if os.path.exists(spec):
+                            local_paths.append(spec)
+                        else:
+                            logger.error("词库本地图片不存在: %s", spec)
+                if local_paths:
+                    if group_code:
+                        await sender.send_images_multi(local_paths, target_group=group_code)
+                    else:
+                        await sender.send_images_multi(local_paths, to_account=sender_id)
+        except Exception as e:
+            logger.error("词库回复发送失败: %s", e)
+
+    _orig_on_push = sender.on_push_message
+
+    async def _lexicon_dispatch(push_json: dict, cache_entry: dict):
+        # 先跑原有自动回复 + 插件逻辑
+        if _orig_on_push:
+            try:
+                await _orig_on_push(push_json, cache_entry)
+            except Exception:
+                pass
+        # 再跑词库匹配
+        await _handle_lexicon(push_json, cache_entry)
+
+    sender.on_push_message = _lexicon_dispatch
+
     while True:
         # 如果连接断开且不在重连中，提示用户
         if not sender.connected:
@@ -3170,6 +3322,34 @@ async def interactive_mode():
                     asyncio.create_task(sender._receive_loop())
                 else:
                     print("使用新凭据连接失败，请检查 KEY/Secret 是否正确")
+                continue
+
+            # ===== /lexicon 词库系统 =====
+            if raw == "/lexicon" or raw.startswith("/lexicon "):
+                arg = raw[9:].strip().lower() if raw.startswith("/lexicon ") else ""
+                if arg == "on":
+                    lexicon_engine.enabled = True
+                    print("词库系统已启用")
+                elif arg == "off":
+                    lexicon_engine.enabled = False
+                    print("词库系统已禁用")
+                elif arg == "reload":
+                    stats = lexicon_engine.load()
+                    print(f"词库已重新加载：{stats['files']} 个文件 / {stats['rules']} 条规则")
+                else:
+                    st = lexicon_engine.stats()
+                    print(
+                        "━━━ 词库系统 ━━━━━\n"
+                        f"状态: {'启用' if st['enabled'] else '禁用'}\n"
+                        f"目录: {st['folder']}\n"
+                        f"已加载文件: {st['files']}\n"
+                        f"规则数: {st['rules']}\n"
+                        "用法:\n"
+                        "  /lexicon        查看本状态\n"
+                        "  /lexicon on     启用\n"
+                        "  /lexicon off    禁用\n"
+                        "  /lexicon reload 重新加载 词库/ 下所有 .txt"
+                    )
                 continue
 
             # ===== /auto 自动回复开关（格式: /auto <text> on [at]  /  /auto off）=====

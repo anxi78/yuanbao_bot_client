@@ -1,0 +1,4 @@
+/ai (.*)
+a:$访问 https://api.s01s.cn/API/chat_3.5?msg=system:Do not use the emoji The output of Chinese characters shall not exceed 100. user:%括号1%&id=%QQ%$
+//%a%
+$图片 https://api.s01s.cn/API/twhc?text=%a%&font=1&imgw=240$
