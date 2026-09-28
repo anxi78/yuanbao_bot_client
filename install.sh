@@ -68,11 +68,11 @@ else
 fi
 
 # 2. 生成 config.json
-read -r -p "请输入 appKey: " APP_KEY
-read -r -p "请输入 appSecret: " APP_SECRET
-read -r -p "请输入默认群聊: " GROUP_CODE
-read -r -p "请输入默认刷屏间隔: " SPAM_INTERVAL
-read -r -p "请输入默认代理群聊: " IMAGE_GROUP_CODE
+read -r -p "请输入 appKey: " APP_KEY < /dev/tty
+read -r -p "请输入 appSecret: " APP_SECRET < /dev/tty
+read -r -p "请输入默认群聊: " GROUP_CODE < /dev/tty
+read -r -p "请输入默认刷屏间隔: " SPAM_INTERVAL < /dev/tty
+read -r -p "请输入默认代理群聊: " IMAGE_GROUP_CODE < /dev/tty
 cat > "$PROJECT_DIR/config.json" << EOF
 {
     "APP_KEY": "$APP_KEY",
