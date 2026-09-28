@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> **YuanBao_Bot_Client已停止维护。
+
+---
+
 <p align="center">
   <img src="https://img.shields.io/badge/🤖-元宝%20Bot%20客户端-0052D9?style=for-the-badge" alt="Yuanbao Bot Client">
 </p>
