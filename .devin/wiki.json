@@ -1,0 +1,156 @@
+{
+  "repo_notes": [
+    {
+      "content": "请全程使用简体中文撰写 wiki 的所有内容：页面标题、正文、章节说明都用简体中文。代码、命令、文件名、路径、变量名、API 名称保持原样不翻译，也不要加中英对照括号。语气面向初学者，解释直白，少用术语，术语首次出现时用一句话说明"
+    }
+  ],
+  "pages": [
+    {
+      "title": "Overview",
+      "purpose": "What yuanbao_bot_client is: a pure-Python WebSocket client for the Tencent Yuanbao Bot (OpenClaw) platform, its two runtime entrypoints (sender.py, group_monitor.py), and repo layout. Links to child pages.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Getting Started & Installation",
+      "purpose": "Termux install.sh bootstrap (mirrors, git lifecycle, ybbot launcher), manual setup, requirements.txt dependencies.",
+      "parent": "Overview",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Configuration Reference",
+      "purpose": "config.json / config.example.json keys (APP_KEY, APP_SECRET, API_DOMAIN, WS_URL, DEFAULT_GROUP_CODE, SPAM_INTERVAL, IMAGE_GROUP_CODE, LEXICON_ENABLED), plus .gitignore runtime artifact conventions.",
+      "parent": "Overview",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Licensing (MIT + GPLv3)",
+      "purpose": "Dual-license structure inherited from yuanbao-openclaw-plugin and obligations for modifications.",
+      "parent": "Overview",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Protocol & Transport Layer",
+      "purpose": "Overview of how the client talks to the Yuanbao gateway: auth signing, WebSocket framing, protobuf codec. Links to children.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Authentication & Connection Lifecycle",
+      "purpose": "HMAC-SHA256 token signing, auth-bind frame, sync_information, heartbeat loop, reconnection with exponential backoff.",
+      "parent": "Protocol & Transport Layer",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Protobuf Codec & Message Frames",
+      "purpose": "SimpleProtobufCodec varint/length-delimited encoding, ConnMsg head fields, cmd types (push/response), request/response correlation via msg_id.",
+      "parent": "Protocol & Transport Layer",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "TIM Message Elements & Media Uploads",
+      "purpose": "TIMTextElem/CustomElem/FaceElem/ImageElem/FileElem/VideoFileElem structures, COS upload pipeline for images, files and stickers.",
+      "parent": "Protocol & Transport Layer",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Interactive Sender (sender.py)",
+      "purpose": "Overview of the SpamSender REPL client: architecture, async loops, and command surface. Links to children.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Command Reference",
+      "purpose": "All slash commands: sending, spam control, batch @, group management, user DB, stickers, ai-image, maintenance.",
+      "parent": "Interactive Sender (sender.py)",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Spam Loops & ESC Interruption",
+      "purpose": "spam_with_at, sticker_spam, replyspam, dmspam, interval control, cbreak-mode _esc_reader/_sleep_with_esc non-blocking interrupt.",
+      "parent": "Interactive Sender (sender.py)",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Terminal UX: Prompt, Autosuggest, Key Bindings",
+      "purpose": "async_input, PromptSession, CommandAutoSuggest, Ctrl+Q/Ctrl+D/ESC bindings, ASCII banner asset.",
+      "parent": "Interactive Sender (sender.py)",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Auto-Reply and Yuanbao Proxy Mode",
+      "purpose": "/auto states, push-message hook chain, _proxy_queue FIFO forwarding to IMAGE_GROUP_CODE and quoted-reply relay back.",
+      "parent": "Interactive Sender (sender.py)",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Group Monitor Daemon",
+      "purpose": "Overview of group_monitor.py: MonitorClient lifecycle, storage and recall handling. Links to children.",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Message Ingestion & SQLite Store",
+      "purpose": "MessageStore schema/indices in group_messages.db, _extract_text/_extract_media_info, group_code filtering, add_message.",
+      "parent": "Group Monitor Daemon",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Recall Detection & Notification",
+      "purpose": "Group.CallbackAfterRecallMsg pipeline, lookup by msg_i
